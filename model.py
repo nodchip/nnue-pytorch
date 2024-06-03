@@ -8,7 +8,7 @@ import sys
 import math
 
 # 3 layer fully connected network
-L1 = 384
+L1 = 256
 L2 = 8
 L3 = 96
 
