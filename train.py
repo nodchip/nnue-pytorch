@@ -72,7 +72,8 @@ def main():
   parser.add_argument("--num-epochs-to-adjust-lr", default=50, type=int, dest='num_epochs_to_adjust_lr', help="Number of epochs to adjust learning rate.")
   parser.add_argument("--score-scaling", default=361, type=float, dest='score_scaling', help="Score scaling.")
   parser.add_argument("--min-newbob-scale", default=1e-5, type=float, dest='min_newbob_scale', help="Minimum learning rate to stop the training.")
-  parser.add_argument("--momentum", default=0.0, type=float, dest='momentum', help="Momentum.")
+  parser.add_argument("--kalman-filter-optimizer-q", default=1e-5, type=float, dest='kalman_filter_optimizer_q', help="Process noise in Kalman filter optimizer.")
+  parser.add_argument("--kalman-filter-optimizer-r", default=1e-3, type=float, dest='kalman_filter_optimizer_r', help="Observation noise in Kalman filter optimizer.")
   features.add_argparse_args(parser)
   args = parser.parse_args()
 
@@ -91,7 +92,9 @@ def main():
       newbob_decay=args.newbob_decay,
       num_epochs_to_adjust_lr=args.num_epochs_to_adjust_lr,
       score_scaling=args.score_scaling,
-      min_newbob_scale=args.min_newbob_scale, momentum=args.momentum)
+      min_newbob_scale=args.min_newbob_scale,
+      kalman_filter_optimizer_q=args.kalman_filter_optimizer_q,
+      kalman_filter_optimizer_r=args.kalman_filter_optimizer_r)
   else:
     nnue = M.NNUE.load_from_checkpoint(args.resume_from_model, feature_set=feature_set)
     nnue.set_feature_set(feature_set)
@@ -105,7 +108,8 @@ def main():
     nnue.num_epochs_to_adjust_lr=args.num_epochs_to_adjust_lr
     nnue.score_scaling=args.score_scaling
     nnue.min_newbob_scale=args.min_newbob_scale
-    nnue.momentum=args.momentum
+    nnue.kalman_filter_optimizer_q=args.kalman_filter_optimizer_q
+    nnue.kalman_filter_optimizer_r=args.kalman_filter_optimizer_r
 
   print("Feature set: {}".format(feature_set.name))
   print("Num real features: {}".format(feature_set.num_real_features))

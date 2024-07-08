@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 import sys
 import math
+import kalman_filter_optimizer
 
 # 3 layer fully connected network
 L1 = 512
@@ -25,7 +26,7 @@ class NNUE(pl.LightningModule):
       self, feature_set, lambda_=[1.0], lr=[1.0],
       label_smoothing_eps=0.0, num_batches_warmup=10000, newbob_decay=0.5,
       num_epochs_to_adjust_lr=500, score_scaling=361, min_newbob_scale=1e-5,
-      momentum=0.0):
+      kalman_filter_optimizer_q=1e-5, kalman_filter_optimizer_r=1e-3):
     super(NNUE, self).__init__()
     self.input = nn.Linear(feature_set.num_features, L1)
     self.feature_set = feature_set
@@ -47,7 +48,8 @@ class NNUE(pl.LightningModule):
     self.warmup_start_global_step = 0
     self.min_newbob_scale = min_newbob_scale
     self.parameter_index = 0
-    self.momentum = momentum
+    self.kalman_filter_optimizer_q = kalman_filter_optimizer_q
+    self.kalman_filter_optimizer_r = kalman_filter_optimizer_r
 
     self._zero_virtual_feature_weights()
 
@@ -224,7 +226,9 @@ class NNUE(pl.LightningModule):
       child.weight.data.clamp_(-kMaxWeight, kMaxWeight)
 
   def configure_optimizers(self):
-    return torch.optim.SGD(self.parameters(), lr=self.lr[0], momentum=self.momentum)
+    return kalman_filter_optimizer.KalmanFilterOptimizer(
+      self.parameters(), lr=self.lr[0], q=self.kalman_filter_optimizer_q,
+      r=self.kalman_filter_optimizer_r)
 
   def get_layers(self, filt):
     """
