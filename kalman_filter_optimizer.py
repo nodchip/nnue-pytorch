@@ -2,17 +2,17 @@ import torch
 from torch.optim.optimizer import Optimizer
 
 class KalmanFilterOptimizer(Optimizer):
-    def __init__(self, params, lr=1e-3, q=1e-5, r=1e-3):
+    def __init__(self, params, lr=1e-3, A=None, H=None, Q=None, R=None, q=1e-5, r=1e-3):
         defaults = dict(lr=lr)
         super(KalmanFilterOptimizer, self).__init__(params, defaults)
         
-        for group in self.param_groups:
-            for p in group['params']:
-                state = self.state[p]
-                state['x'] = torch.zeros_like(p.data)
-                state['P'] = torch.ones_like(p.data)
-                state['q'] = torch.full_like(p.data, q)
-                state['r'] = torch.full_like(p.data, r)
+        self.A = A if A is not None else torch.eye(len(params))
+        self.H = H if H is not None else torch.eye(len(params))
+        self.Q = Q if Q is not None else torch.eye(len(params)) * 1e-5
+        self.R = R if R is not None else torch.eye(len(params)) * 1e-3
+        
+        self.state['x'] = torch.zeros(len(params), 1)
+        self.state['P'] = torch.eye(len(params))
 
     def step(self, closure=None):
         loss = None
@@ -28,25 +28,17 @@ class KalmanFilterOptimizer(Optimizer):
                 
                 grad = p.grad.data
                 
-                state = self.state[p]
-                x = state['x']
-                P = state['P']
-                q = state['q']
-                r = state['r']
-                
                 # Predict
-                x_pred = x
-                P_pred = P + q
+                x_pred = self.A @ self.state['x']
+                P_pred = self.A @ self.state['P'] @ self.A.T + self.Q
                 
                 # Update
-                K = P_pred / (P_pred + r)
-                x_new = x_pred + K * (grad - x_pred)
-                P_new = (1 - K) * P_pred
-                
-                state['x'] = x_new
-                state['P'] = P_new
+                y = grad.view(-1, 1)
+                K = P_pred @ self.H.T @ torch.inverse(self.H @ P_pred @ self.H.T + self.R)
+                self.state['x'] = x_pred + K @ (y - self.H @ x_pred)
+                self.state['P'] = (torch.eye(len(p)) - K @ self.H) @ P_pred
                 
                 # Update parameters
-                p.data -= lr * x_new
+                p.data -= lr * self.state['x'].view_as(p.data)
         
         return loss
