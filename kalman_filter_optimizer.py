@@ -8,8 +8,8 @@ class KalmanFilterOptimizer(Optimizer):
         
         self.A = A if A is not None else torch.eye(len(params))
         self.H = H if H is not None else torch.eye(len(params))
-        self.Q = Q if Q is not None else torch.eye(len(params)) * 1e-5
-        self.R = R if R is not None else torch.eye(len(params)) * 1e-3
+        self.Q = Q if Q is not None else torch.eye(len(params)) * q
+        self.R = R if R is not None else torch.eye(len(params)) * r
         
         self.state['x'] = torch.zeros(len(params), 1)
         self.state['P'] = torch.eye(len(params))
