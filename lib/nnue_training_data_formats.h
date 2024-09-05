@@ -8141,7 +8141,7 @@ namespace binpack
         return static_cast<Value>(p1 + score);
     }
 
-    constexpr const int EnteringKingBonusFactor = 20;
+    constexpr const int EnteringKingBonusFactor = 0;
 
     [[nodiscard]] inline TrainingDataEntry packedSfenValueToTrainingDataEntry(const Learner::PackedSfenValue& psv)
     {
