@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 import sys
 import math
+import collections
 
 # 3 layer fully connected network
 L1 = 512
@@ -50,6 +51,146 @@ class NNUE(pl.LightningModule):
     self.momentum = momentum
 
     self._zero_virtual_feature_weights()
+
+    self._initialize_input_transformer_weights()
+  
+  def _initialize_input_transformer_weights(self):
+    # 手駒
+    BONA_PIECE_ZERO = 0
+    f_hand_pawn = BONA_PIECE_ZERO + 1
+    e_hand_pawn = 20
+    f_hand_lance = 39
+    e_hand_lance = 44
+    f_hand_knight = 49
+    e_hand_knight = 54
+    f_hand_silver = 59
+    e_hand_silver = 64
+    f_hand_gold = 69
+    e_hand_gold = 74
+    f_hand_bishop = 79
+    e_hand_bishop = 82
+    f_hand_rook = 85
+    e_hand_rook = 88
+    fe_hand_end = 90
+
+    # 盤上の駒
+    f_pawn = fe_hand_end
+    e_pawn = f_pawn + 81
+    f_lance = e_pawn + 81
+    e_lance = f_lance + 81
+    f_knight = e_lance + 81
+    e_knight = f_knight + 81
+    f_silver = e_knight + 81
+    e_silver = f_silver + 81
+    f_gold = e_silver + 81
+    e_gold = f_gold + 81
+    f_bishop = e_gold + 81
+    e_bishop = f_bishop + 81
+    f_horse = e_bishop + 81
+    e_horse = f_horse + 81
+    f_rook = e_horse + 81
+    e_rook = f_rook + 81
+    f_dragon = e_rook + 81
+    e_dragon = f_dragon + 81
+    fe_old_end = e_dragon + 81
+
+    fe_new_end = fe_old_end
+
+    fe_end = fe_new_end
+
+    # file: 筋
+    # rank: 段
+
+    def is_file_inside(file: int):
+      return 0 <= file < 9
+    
+    def is_rank_inside(rank: int):
+      return 0 <= rank < 9
+
+    def to_square(file: int, rank: int):
+      return file * 9 + rank
+
+    def halfkp_idx(king_file: int, king_rank: int, piece_file: int, piece_rank: int, piece: int):
+      assert(is_file_inside(king_file))
+      assert(is_rank_inside(king_rank))
+      assert(is_file_inside(piece_file))
+      assert(is_rank_inside(piece_rank))
+      king_square = to_square(king_file, king_rank)
+      piece_square = to_square(piece_file, piece_rank)
+      return piece_square + piece + king_square * fe_end
+
+    pawn_deltas = [[0, -1]]
+
+    lance_deltas = list()
+    for delta_rank in range(-8, 0):
+      lance_deltas.append([0, delta_rank])
+    
+    knight_deltas = [[-1, -2], [1, -2]]
+
+    silver_deltas = [
+      [-1, -1], [0, -1], [1, -1],
+      [-1, 0], [1, 0],
+      [-1, 1], [1, 1],
+    ]
+
+    gold_deltas = [
+      [-1, -1], [0, -1], [1, -1],
+      [-1, 0], [1, 0],
+      [0, 1],
+    ]
+
+    bishop_deltas = list()
+    for delta in range(-8, 8 + 1):
+      if delta == 0:
+        continue;
+      bishop_deltas.append([delta, delta])
+      bishop_deltas.append([delta, -delta])
+
+    horse_deltas = list(bishop_deltas)
+    horse_deltas.extend([
+      [0, -1], [-1, 0], [1, 0], [0, 1],
+    ])
+
+    rook_deltas = list()
+    for delta in range(-8, 8 + 1):
+      if delta == 0:
+        continue
+      rook_deltas.append([delta, 0])
+      rook_deltas.append([0, delta])
+
+    dragon_deltas = list(rook_deltas)
+    dragon_deltas.extend([
+      [-1, -1], [-1, 1], [1, -1], [1, 1],
+    ])
+
+    RelativePositions = collections.namedtuple('RelativePositions', ['piece', 'relative_positions'])
+    relative_positions_list = [
+      RelativePositions(e_pawn, pawn_deltas),
+      RelativePositions(e_lance, lance_deltas),
+      RelativePositions(e_knight, knight_deltas),
+      RelativePositions(e_silver, silver_deltas),
+      RelativePositions(e_gold, gold_deltas),
+      RelativePositions(e_bishop, bishop_deltas),
+      RelativePositions(e_horse, horse_deltas),
+      RelativePositions(e_rook, rook_deltas),
+      RelativePositions(e_dragon, dragon_deltas),
+    ]
+    
+    with torch.no_grad():
+      for king_file in range(9):
+        for king_rank in range(9):
+          for relative_positions in relative_positions_list:
+            for relative_position in relative_positions.relative_positions:
+              piece_file = king_file + relative_position[0]
+              if not is_file_inside(piece_file):
+                continue
+
+              piece_rank = king_rank + relative_position[1]
+              if not is_rank_inside(piece_rank):
+                continue
+
+              index = halfkp_idx(king_file, king_rank, piece_file, piece_rank, relative_positions.piece)
+              self.input.weight[0][index] = 1.0
 
   '''
   We zero all virtual feature weights because during serialization to .nnue
