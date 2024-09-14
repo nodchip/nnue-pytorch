@@ -157,6 +157,87 @@ struct HalfKPFactorized {
     }
 };
 
+/*
+竜馬飛角香が動けるマスの数
+
+以下の順に並んでいる。  
+- 味方の竜が動けるマスの数
+- 相手の竜が動けるマスの数
+- 味方の馬が動けるマスの数
+- 相手の馬が動けるマスの数
+- 味方の飛車が動けるマスの数
+- 相手の飛車が動けるマスの数
+- 味方の角が動けるマスの数
+- 相手の角が動けるマスの数
+- 味方の香が動けるマスの数
+- 相手の香が動けるマスの数
+
+動けるマスの数は、駒が置かれているマス×動けるマスの数で表現する。
+*/
+struct HalfKPMobility {
+    static constexpr int MAX_MOBILITY_DRAGON = 20 + 1;
+    static constexpr int MAX_MOBILITY_HORSE = 20 + 1;
+    static constexpr int MAX_MOBILITY_ROOK = 16 + 1;
+    static constexpr int MAX_MOBILITY_BISHOP = 16 + 1;
+    static constexpr int MAX_MOBILITY_LANCE = 8 + 1;
+    static constexpr int INPUTS_MOBILITY = HalfKP::NUM_SQ * (MAX_MOBILITY_DRAGON + MAX_MOBILITY_HORSE + MAX_MOBILITY_ROOK + MAX_MOBILITY_BISHOP + MAX_MOBILITY_LANCE) * 2;
+    static constexpr int INPUTS = HalfKP::INPUTS + INPUTS_MOBILITY;
+
+    static constexpr int MAX_ACTIVE_FEATURES = HalfKP::MAX_ACTIVE_FEATURES + 8;
+
+    static constexpr int PIECE_TYPE_AND_MAX_MOBILITIES[5][2] = {
+        {DRAGON, MAX_MOBILITY_DRAGON},
+        {HORSE, MAX_MOBILITY_HORSE},
+        {ROOK, MAX_MOBILITY_ROOK},
+        {BISHOP, MAX_MOBILITY_BISHOP},
+        {LANCE, MAX_MOBILITY_LANCE},
+    };
+
+    static int fill_features_sparse(int i, const TrainingDataEntry& e, int* features, float* values, int& counter, Color color)
+    {
+        int offset = HalfKP::fill_features_sparse(i, e, features, values, counter, color);
+
+        auto& pos = *e.pos;
+        //std::cout << pos << std::endl;
+
+        for (int piece_type_and_max_mobilities_index = 0;
+            piece_type_and_max_mobilities_index < std::size(PIECE_TYPE_AND_MAX_MOBILITIES);
+            ++piece_type_and_max_mobilities_index) {
+            PieceType piece_type = static_cast<PieceType>(
+                PIECE_TYPE_AND_MAX_MOBILITIES[piece_type_and_max_mobilities_index][0]);
+            int max_mobility = PIECE_TYPE_AND_MAX_MOBILITIES[piece_type_and_max_mobilities_index][1];
+            Color piece_color = color;
+            for (int color_index = 0; color_index < Color::COLOR_NB; ++color_index) {
+                auto pieces = pos.pieces(piece_color, piece_type);
+                auto occ = pos.pieces();
+
+                auto target = ~pos.pieces(piece_color);
+
+                while (pieces)
+                {
+                    auto from = pieces.pop();
+                    // fromの升にある駒をfromの升においたときの利き
+                    auto to = effects_from(pos.piece_on(from), from, occ) & target;
+                    //std::cout << to << std::endl;
+                    int num_cells = to.pop_count();
+
+                    int idx = counter * 2;
+                    features[idx] = i;
+                    features[idx + 1] = offset + max_mobility * from + num_cells;
+                    values[counter] = 1.0f;
+                    counter += 1;
+
+                    offset += max_mobility * HalfKP::NUM_SQ;
+                }
+
+                piece_color = ~piece_color;
+            }
+        }
+
+        return INPUTS;
+    }
+};
+
 // struct HalfKA {
 //     static constexpr int NUM_SQ = 64;
 //     static constexpr int NUM_PT = 12;
@@ -505,7 +586,7 @@ static void EnsureInitialize()
     initialized = true;
 
     USI::init(Options);
-    //Bitboards::init();
+    Bitboards::init();
     //Position::init();
     //Search::init();
 
@@ -550,6 +631,10 @@ extern "C" {
         else if (feature_set == "HalfKP^")
         {
             return new SparseBatch(FeatureSet<HalfKPFactorized>{}, entries);
+        }
+        else if (feature_set == "HalfKPMobility")
+        {
+            return new SparseBatch(FeatureSet<HalfKPMobility>{}, entries);
         }
         // else if (feature_set == "HalfKA")
         // {
@@ -600,6 +685,10 @@ extern "C" {
         {
             return new FeaturedBatchStream<FeatureSet<HalfKPFactorized>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
         }
+        else if (feature_set == "HalfKPMobility")
+        {
+            return new FeaturedBatchStream<FeatureSet<HalfKPMobility>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
+        }
         // else if (feature_set == "HalfKA")
         // {
         //     return new FeaturedBatchStream<FeatureSet<HalfKA>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
@@ -634,7 +723,7 @@ extern "C" {
 
 int main()
 {
-    auto stream = create_sparse_batch_stream("HalfKP^", 4, R"(C:\shogi\training_data\suisho5.shuffled.qsearch\shuffled.bin)", 8192, true, false, 0);
+    auto stream = create_sparse_batch_stream("HalfKPMobility", 4, R"(C:\shogi\validation_data\suisho5.shuffled.qsearch.valid\suisho5.shuffled.qsearch.valid.bin)", 8192, true, false, 0);
     auto t0 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 1000; ++i)
     {
