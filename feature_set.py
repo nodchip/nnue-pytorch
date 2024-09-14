@@ -7,7 +7,7 @@ def _calculate_features_hash(features):
         return features[0].hash
 
     tail_hash = _calculate_features_hash(features[1:])
-    return features[0].hash ^ (tail_hash << 1) ^ (tail_hash >> 1) & 0xffffffff
+    return features[0].hash ^ (tail_hash << 1) ^ (tail_hash >> 31) & 0xffffffff
 
 class FeatureSet:
     '''

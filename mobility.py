@@ -31,10 +31,9 @@ class Features(FeatureBlock):
   動けるマスの数は、駒が置かれているマス×動けるマスの数で表現する。
   '''
   def __init__(self):
-    self.num_features = NUM_SQ * NUM_PLANES + NUM_SQ * (MAX_MOBILITY_DRAGON + MAX_MOBILITY_HORSE + MAX_MOBILITY_ROOK + MAX_MOBILITY_BISHOP + MAX_MOBILITY_LANCE) * 2
-    # Hack: 複数のFeatureからなるFeatureSetを実装していない箇所がある。そのためFeatureは常に1つとし、ハッシュの計算を自前で行う。
-    super(Features, self).__init__('HalfKPMobility', 0x5d69d5b8 ^ (0x6d8d203d << 1) ^ (0x6d8d203d >> 31) & 0xffffffff , OrderedDict([(
-      'HalfKPMobility',
+    self.num_features = NUM_SQ * (MAX_MOBILITY_DRAGON + MAX_MOBILITY_HORSE + MAX_MOBILITY_ROOK + MAX_MOBILITY_BISHOP + MAX_MOBILITY_LANCE) * 2
+    super(Features, self).__init__('Mobility', 0x6d8d203d , OrderedDict([(
+      'Mobility',
       self.num_features
       )]))
 

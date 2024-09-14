@@ -632,7 +632,7 @@ extern "C" {
         {
             return new SparseBatch(FeatureSet<HalfKPFactorized>{}, entries);
         }
-        else if (feature_set == "HalfKPMobility")
+        else if (feature_set == "HalfKP+Mobility")
         {
             return new SparseBatch(FeatureSet<HalfKPMobility>{}, entries);
         }
@@ -685,7 +685,7 @@ extern "C" {
         {
             return new FeaturedBatchStream<FeatureSet<HalfKPFactorized>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
         }
-        else if (feature_set == "HalfKPMobility")
+        else if (feature_set == "HalfKP+Mobility")
         {
             return new FeaturedBatchStream<FeatureSet<HalfKPMobility>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
         }
@@ -723,7 +723,7 @@ extern "C" {
 
 int main()
 {
-    auto stream = create_sparse_batch_stream("HalfKPMobility", 4, R"(C:\shogi\validation_data\suisho5.shuffled.qsearch.valid\suisho5.shuffled.qsearch.valid.bin)", 8192, true, false, 0);
+    auto stream = create_sparse_batch_stream("HalfKP+Mobility", 4, R"(C:\shogi\validation_data\suisho5.shuffled.qsearch.valid\suisho5.shuffled.qsearch.valid.bin)", 8192, true, false, 0);
     auto t0 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 1000; ++i)
     {
