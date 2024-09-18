@@ -220,10 +220,14 @@ struct HalfKPMobility {
                     auto to = effects_from(pos.piece_on(from), from, occ) & target;
                     //std::cout << to << std::endl;
                     int num_cells = to.pop_count();
+                    auto from_from_perspective = from;
+                    if (color == WHITE) {
+                        from_from_perspective = Inv(from_from_perspective);
+                    }
 
                     int idx = counter * 2;
                     features[idx] = i;
-                    features[idx + 1] = offset + max_mobility * from + num_cells;
+                    features[idx + 1] = offset + max_mobility * from_from_perspective + num_cells;
                     values[counter] = 1.0f;
                     counter += 1;
 
