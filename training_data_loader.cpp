@@ -230,13 +230,14 @@ struct HalfKPMobility {
                     features[idx + 1] = offset + max_mobility * from_from_perspective + num_cells;
                     values[counter] = 1.0f;
                     counter += 1;
-
-                    offset += max_mobility * HalfKP::NUM_SQ;
                 }
 
+                offset += max_mobility * HalfKP::NUM_SQ;
                 piece_color = ~piece_color;
             }
         }
+
+        ASSERT_LV3(offset = INPUTS);
 
         return INPUTS;
     }
