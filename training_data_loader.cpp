@@ -157,6 +157,57 @@ struct HalfKPFactorized {
     }
 };
 
+struct HalfKP_hm {
+    static constexpr int NUM_SQ = 81;
+    static constexpr int NUM_PLANES = 1548; // == fe_end
+    static constexpr int INPUTS = NUM_PLANES * 9 * 5;
+
+    static constexpr int MAX_ACTIVE_FEATURES = 38;
+    static constexpr Square HORIZONTAL_MIRROR_TABLE[NUM_SQ] = {
+        SQ_11, SQ_12, SQ_13, SQ_14, SQ_15, SQ_16, SQ_17, SQ_18, SQ_19,
+        SQ_21, SQ_22, SQ_23, SQ_24, SQ_25, SQ_26, SQ_27, SQ_28, SQ_29,
+        SQ_31, SQ_32, SQ_33, SQ_34, SQ_35, SQ_36, SQ_37, SQ_38, SQ_39,
+        SQ_41, SQ_42, SQ_43, SQ_44, SQ_45, SQ_46, SQ_47, SQ_48, SQ_49,
+        SQ_51, SQ_52, SQ_53, SQ_54, SQ_55, SQ_56, SQ_57, SQ_58, SQ_59,
+        SQ_41, SQ_42, SQ_43, SQ_44, SQ_45, SQ_46, SQ_47, SQ_48, SQ_49,
+        SQ_31, SQ_32, SQ_33, SQ_34, SQ_35, SQ_36, SQ_37, SQ_38, SQ_39,
+        SQ_21, SQ_22, SQ_23, SQ_24, SQ_25, SQ_26, SQ_27, SQ_28, SQ_29,
+        SQ_11, SQ_12, SQ_13, SQ_14, SQ_15, SQ_16, SQ_17, SQ_18, SQ_19,
+    };
+
+    static int fill_features_sparse(int i, const TrainingDataEntry& e, int* features, float* values, int& counter, Color color)
+    {
+        auto& pos = *e.pos;
+        Eval::BonaPiece* pieces = nullptr;
+        if (color == Color::BLACK) {
+            pieces = pos.eval_list()->piece_list_fb();
+        }
+        else {
+            pieces = pos.eval_list()->piece_list_fw();
+        }
+        PieceNumber target = static_cast<PieceNumber>(PIECE_NUMBER_KING + color);
+        auto sq_target_k = static_cast<Square>((pieces[target] - Eval::BonaPiece::f_king) % SQ_NB);
+
+        // We order the features so that the resulting sparse
+        // tensor is coalesced.
+        int features_unordered[38];
+        for (PieceNumber i = PIECE_NUMBER_ZERO; i < PIECE_NUMBER_KING; ++i) {
+            auto p = pieces[i];
+            features_unordered[i] = static_cast<int>(Eval::fe_end) * static_cast<int>(HORIZONTAL_MIRROR_TABLE[sq_target_k]) + p;
+        }
+        std::sort(features_unordered, features_unordered + PIECE_NUMBER_KING);
+        for (int k = 0; k < PIECE_NUMBER_KING; ++k)
+        {
+            int idx = counter * 2;
+            features[idx] = i;
+            features[idx + 1] = features_unordered[k];
+            values[counter] = 1.0f;
+            counter += 1;
+        }
+        return INPUTS;
+    }
+};
+
 /*
 竜馬飛角香が動けるマスの数
 
@@ -637,6 +688,10 @@ extern "C" {
         {
             return new SparseBatch(FeatureSet<HalfKPFactorized>{}, entries);
         }
+        else if (feature_set == "HalfKP_hm")
+        {
+            return new SparseBatch(FeatureSet<HalfKP_hm>{}, entries);
+        }
         else if (feature_set == "HalfKP+Mobility")
         {
             return new SparseBatch(FeatureSet<HalfKPMobility>{}, entries);
@@ -690,6 +745,10 @@ extern "C" {
         {
             return new FeaturedBatchStream<FeatureSet<HalfKPFactorized>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
         }
+        else if (feature_set == "HalfKP_hm")
+        {
+            return new FeaturedBatchStream<FeatureSet<HalfKP_hm>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
+        }
         else if (feature_set == "HalfKP+Mobility")
         {
             return new FeaturedBatchStream<FeatureSet<HalfKPMobility>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
@@ -728,7 +787,7 @@ extern "C" {
 
 int main()
 {
-    auto stream = create_sparse_batch_stream("HalfKP+Mobility", 4, R"(C:\shogi\validation_data\suisho5.shuffled.qsearch.valid\suisho5.shuffled.qsearch.valid.bin)", 8192, true, false, 0);
+    auto stream = create_sparse_batch_stream("HalfKP_hm", 4, R"(C:\shogi\validation_data\suisho5.shuffled.qsearch.valid\suisho5.shuffled.qsearch.valid.bin)", 8192, true, false, 0);
     auto t0 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 1000; ++i)
     {
