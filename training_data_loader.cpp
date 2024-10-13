@@ -163,17 +163,6 @@ struct HalfKP_hm {
     static constexpr int INPUTS = NUM_PLANES * 9 * 5;
 
     static constexpr int MAX_ACTIVE_FEATURES = 38;
-    static constexpr Square HORIZONTAL_MIRROR_TABLE[NUM_SQ] = {
-        SQ_11, SQ_12, SQ_13, SQ_14, SQ_15, SQ_16, SQ_17, SQ_18, SQ_19,
-        SQ_21, SQ_22, SQ_23, SQ_24, SQ_25, SQ_26, SQ_27, SQ_28, SQ_29,
-        SQ_31, SQ_32, SQ_33, SQ_34, SQ_35, SQ_36, SQ_37, SQ_38, SQ_39,
-        SQ_41, SQ_42, SQ_43, SQ_44, SQ_45, SQ_46, SQ_47, SQ_48, SQ_49,
-        SQ_51, SQ_52, SQ_53, SQ_54, SQ_55, SQ_56, SQ_57, SQ_58, SQ_59,
-        SQ_41, SQ_42, SQ_43, SQ_44, SQ_45, SQ_46, SQ_47, SQ_48, SQ_49,
-        SQ_31, SQ_32, SQ_33, SQ_34, SQ_35, SQ_36, SQ_37, SQ_38, SQ_39,
-        SQ_21, SQ_22, SQ_23, SQ_24, SQ_25, SQ_26, SQ_27, SQ_28, SQ_29,
-        SQ_11, SQ_12, SQ_13, SQ_14, SQ_15, SQ_16, SQ_17, SQ_18, SQ_19,
-    };
 
     static int fill_features_sparse(int i, const TrainingDataEntry& e, int* features, float* values, int& counter, Color color)
     {
@@ -193,7 +182,21 @@ struct HalfKP_hm {
         int features_unordered[38];
         for (PieceNumber i = PIECE_NUMBER_ZERO; i < PIECE_NUMBER_KING; ++i) {
             auto p = pieces[i];
-            features_unordered[i] = static_cast<int>(Eval::fe_end) * static_cast<int>(HORIZONTAL_MIRROR_TABLE[sq_target_k]) + p;
+            auto sq_k = sq_target_k;
+			if (sq_k >= SQ_61) {
+				// 玉が6筋～9筋にいる場合、4筋～1筋に反転する。
+				sq_k = Mir(sq_k);
+
+				if (p >= Eval::BonaPiece::fe_hand_end) {
+					// 持駒は反転しない。
+					int piece_index = (p - Eval::BonaPiece::fe_hand_end) / SQ_NB;
+					Square sq_p = static_cast<Square>((p - Eval::BonaPiece::fe_hand_end) % SQ_NB);
+					sq_p = Mir(sq_p);
+					p = static_cast<Eval::BonaPiece>(Eval::BonaPiece::fe_hand_end + piece_index * static_cast<int>(SQ_NB) + sq_p);
+				}
+			}
+
+            features_unordered[i] = static_cast<int>(Eval::fe_end) * static_cast<int>(sq_k) + p;
         }
         std::sort(features_unordered, features_unordered + PIECE_NUMBER_KING);
         for (int k = 0; k < PIECE_NUMBER_KING; ++k)
