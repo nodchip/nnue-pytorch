@@ -354,6 +354,7 @@ struct SparseBatch
         black = new int[size * FeatureSet<Ts...>::MAX_ACTIVE_FEATURES * 2];
         white_values = new float[size * FeatureSet<Ts...>::MAX_ACTIVE_FEATURES];
         black_values = new float[size * FeatureSet<Ts...>::MAX_ACTIVE_FEATURES];
+        ply = new float[size];
 
         num_active_white_features = 0;
         num_active_black_features = 0;
@@ -379,6 +380,7 @@ struct SparseBatch
     int* black;
     float* white_values;
     float* black_values;
+    float* ply;
 
     ~SparseBatch()
     {
@@ -389,6 +391,7 @@ struct SparseBatch
         delete[] black;
         delete[] white_values;
         delete[] black_values;
+        delete[] ply;
     }
 
 private:
@@ -399,6 +402,7 @@ private:
         is_white[i] = static_cast<float>(e.pos->side_to_move() == Color::BLACK);
         outcome[i] = (e.result + 1.0f) / 2.0f;
         score[i] = e.score;
+        ply[i] = e.ply;
         fill_features(FeatureSet<Ts...>{}, i, e);
     }
 

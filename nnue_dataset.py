@@ -25,7 +25,8 @@ class SparseBatch(ctypes.Structure):
         ('white', ctypes.POINTER(ctypes.c_int)),
         ('black', ctypes.POINTER(ctypes.c_int)),
         ('white_values', ctypes.POINTER(ctypes.c_float)),
-        ('black_values', ctypes.POINTER(ctypes.c_float))
+        ('black_values', ctypes.POINTER(ctypes.c_float)),
+        ('ply', ctypes.POINTER(ctypes.c_float)),
     ]
 
     def get_tensors(self, device):
@@ -41,7 +42,8 @@ class SparseBatch(ctypes.Structure):
         black = torch.sparse_coo_tensor(ib, black_values, (self.size, self.num_inputs))
         white._coalesced_(True)
         black._coalesced_(True)
-        return us, them, white, black, outcome, score
+        ply = torch.from_numpy(np.ctypeslib.as_array(self.ply, shape=(self.size, 1))).pin_memory().to(device=device, non_blocking=True)
+        return us, them, white, black, outcome, score, ply
 
 SparseBatchPtr = ctypes.POINTER(SparseBatch)
 
