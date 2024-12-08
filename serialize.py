@@ -11,6 +11,9 @@ from torch.utils.data import DataLoader
 from functools import reduce
 import operator
 from torch import nn
+import os
+import matplotlib.pyplot as plt
+import datetime
 
 def ascii_hist(name, x, bins=6):
   N,X = numpy.histogram(x, bins=bins)
@@ -31,7 +34,10 @@ class NNUEWriter():
   """
   All values are stored in little endian.
   """
-  def __init__(self, model):
+  def __init__(self, model, output_directory_path):
+    self.output_directory_path = output_directory_path
+    os.makedirs(self.output_directory_path, exist_ok=True)
+    self.figure_index = 0
     self.buf = bytearray()
 
     fc_hash = self.fc_hash(model)
@@ -67,8 +73,8 @@ class NNUEWriter():
     self.int32(VERSION) # version
     self.int32(fc_hash ^ model.feature_set.hash ^ (M.L1*2)) # halfkp network hash
     description = b"Features=HalfKP(Friend)[125388->256x2],"
-    description += b"Network=AffineTransform[1<-32](ClippedReLU[32](AffineTransform[32<-32]"
-    description += b"(ClippedReLU[32](AffineTransform[32<-512](InputSlice[512(0:512)])))))"
+    description += b"Network=AffineTransform[1<-256](ClippedReLU[256](AffineTransform[256<-256]"
+    description += b"(ClippedReLU[256](AffineTransform[256<-512](InputSlice[512(0:512)])))))"
     self.int32(len(description)) # Network definition
     self.buf.extend(description)
 
@@ -80,6 +86,24 @@ class NNUEWriter():
       weight_coalesced[:, i_real] = sum(weight[:, i_virtual] for i_virtual in is_virtual)
 
     return weight_coalesced
+  
+  def save_histogram(self, file_name, data, xlabel, ylabel, title):
+    fig, ax = plt.subplots()
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    bins = min(256, data.numel())
+    frequency, value = data.to(torch.float).histogram(bins=bins)
+    value += (value[1] - value[0]) * 0.5
+    width = value[1] - value[0]
+    value = value[:-1]
+    ax.bar(value, frequency, width=width)
+    ax.set_title(title)
+    fig.savefig(os.path.join(self.output_directory_path, file_name))
+    print(f'Saved a histogram to {file_name}')
+
+    mean = data.to(torch.float).mean().item()
+    std = data.to(torch.float).std().item()
+    print(f'{mean=} {std=}')
 
   def write_feature_transformer(self, model):
     # int16 bias = round(x * 127)
@@ -88,13 +112,20 @@ class NNUEWriter():
     bias = layer.bias.data
     bias = bias.mul(127).round().to(torch.int16)
     ascii_hist('ft bias:', bias.numpy())
+    self.save_histogram(f'{self.figure_index:02}_feature_transformer_bias.png', bias, 'bias', 'frequency', 'feature transformer bias')
+    self.figure_index += 1
     self.buf.extend(bias.flatten().numpy().tobytes())
 
+    print(datetime.datetime.now())
     weight = self.coalesce_ft_weights(model, layer)
     weight = weight.mul(127).round().to(torch.int16)
     ascii_hist('ft weight:', weight.numpy())
+    self.save_histogram(f'{self.figure_index:02}_feature_transformer_weight.png', weight, 'weight', 'frequency', 'feature transformer weight')
+    self.figure_index += 1
     # weights stored as [41024][256], so we need to transpose the pytorch [256][41024]
     self.buf.extend(weight.transpose(0, 1).flatten().numpy().tobytes())
+    print(datetime.datetime.now())
+    print()
 
   def write_fc_layer(self, model, layer, is_output=False):
     # FC layers are stored as int8 weights, and int32 biases
@@ -112,6 +143,8 @@ class NNUEWriter():
     bias = layer.bias.data
     bias = bias.mul(kBiasScale).round().to(torch.int32)
     ascii_hist('fc bias:', bias.numpy())
+    self.save_histogram(f'{self.figure_index:02}_fully_connected_layer_bias.png', bias, 'bias', 'frequency', 'fully connected layer bias')
+    self.figure_index += 1
     self.buf.extend(bias.flatten().numpy().tobytes())
     weight = layer.weight.data
     clipped = torch.count_nonzero(weight.clamp(-kMaxWeight, kMaxWeight) - weight)
@@ -120,6 +153,8 @@ class NNUEWriter():
     print("layer has {}/{} clipped weights. Exceeding by {} the maximum {}.".format(clipped, total_elements, clipped_max, kMaxWeight))
     weight = weight.clamp(-kMaxWeight, kMaxWeight).mul(kWeightScale).round().to(torch.int8)
     ascii_hist('fc weight:', weight.numpy())
+    self.save_histogram(f'{self.figure_index:02}_fully_connected_layer_weight.png', weight, 'weight', 'frequency', 'fully connected layer weight')
+    self.figure_index += 1
     # FC inputs are padded to 32 elements for simd.
     num_input = weight.shape[1]
     if num_input % 32 != 0:
@@ -129,6 +164,7 @@ class NNUEWriter():
       weight = new_w
     # Stored as [outputs][inputs], so we can flatten
     self.buf.extend(weight.flatten().numpy().tobytes())
+    print()
 
   def int32(self, v):
     self.buf.extend(struct.pack("<I", v))
@@ -223,7 +259,7 @@ def main():
     else:
       nnue = M.NNUE.load_from_checkpoint(args.source, feature_set=feature_set)
     nnue.eval()
-    writer = NNUEWriter(nnue)
+    writer = NNUEWriter(nnue, os.path.dirname(args.target))
     with open(args.target, 'wb') as f:
       f.write(writer.buf)
   elif args.source.endswith(".nnue"):
