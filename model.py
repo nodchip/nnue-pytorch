@@ -133,8 +133,7 @@ class NNUE(pl.LightningModule):
   def __init__(
       self, feature_set, lambda_=[1.0], lr=[1.0],
       label_smoothing_eps=0.0, num_batches_warmup=10000, newbob_decay=0.5,
-      num_epochs_to_adjust_lr=500, min_newbob_scale=1e-5, momentum=0.0,
-      in_scaling=240, out_scaling=280, offset=270):
+      num_epochs_to_adjust_lr=500, score_scaling=361, min_newbob_scale=1e-5, momentum=0.0):
     super(NNUE, self).__init__()
     self.num_ls_buckets = 9
     self.input = nn.Linear(feature_set.num_features, L1)
@@ -148,9 +147,6 @@ class NNUE(pl.LightningModule):
     self.num_epochs_to_adjust_lr = num_epochs_to_adjust_lr
     self.min_newbob_scale = min_newbob_scale
     self.momentum = momentum
-    self.in_scaling = in_scaling
-    self.out_scaling = out_scaling
-    self.offset = offset
 
     self.nnue2score = 600.0
     self.weight_scale_hidden = 64.0
@@ -160,6 +156,7 @@ class NNUE(pl.LightningModule):
     self.best_loss = 1e10
     self.latest_loss_sum = 0.0
     self.latest_loss_count = 0
+    self.score_scaling = score_scaling
     # Warmupを開始するステップ数
     self.warmup_start_global_step = 0
     self.parameter_index = 0
@@ -273,36 +270,30 @@ class NNUE(pl.LightningModule):
     return x
 
   def step_(self, batch, batch_idx, loss_type):
-    self._clip_weights()
     us, them, white, black, outcome, score, layer_stack_indices, ply = batch
 
-    # convert the network and search scores to an estimate match result
-    # based on the win_rate_model, with scalings and offsets optimized
-    in_scaling = self.in_scaling
-    out_scaling = self.out_scaling
-    offset = self.offset
+    # 600 is the kPonanzaConstant scaling factor needed to convert the training net output to a score.
+    # This needs to match the value used in the serializer
+    nnue2score = 600
+    scaling = self.score_scaling
 
-    scorenet = self(us, them, white, black, layer_stack_indices) * self.nnue2score
-    q  = ( scorenet - offset) / in_scaling  # used to compute the chance of a win
-    qm = (-scorenet - offset) / in_scaling  # used to compute the chance of a loss
-    qf = 0.5 * (1.0 + q.sigmoid() - qm.sigmoid())  # estimated match result (using win, loss and draw probs).
+    q = self(us, them, white, black, layer_stack_indices) * nnue2score / scaling
+    t = outcome * (1.0 - self.label_smoothing_eps * 2.0) + self.label_smoothing_eps
+    p = (score / scaling).sigmoid()
 
-    p  = ( score - offset) / out_scaling
-    pm = (-score - offset) / out_scaling
-    pf = 0.5 * (1.0 + p.sigmoid() - pm.sigmoid())
-
-    t = outcome
+    epsilon = 1e-12
+    teacher_entropy = -(p * (p + epsilon).log() + (1.0 - p) * (1.0 - p + epsilon).log())
+    outcome_entropy = -(t * (t + epsilon).log() + (1.0 - t) * (1.0 - t + epsilon).log())
+    teacher_loss = -(p * F.logsigmoid(q) + (1.0 - p) * F.logsigmoid(-q))
+    outcome_loss = -(t * F.logsigmoid(q) + (1.0 - t) * F.logsigmoid(-q))
     if self.lambda_[self.parameter_index] >= 0.0:
-      actual_lambda = self.lambda_[self.parameter_index]
+      lambda_ = self.lambda_[self.parameter_index]
     else:
       ply_threshold = 60.0
-      actual_lambda = 1.0 - torch.clamp(ply / ply_threshold, 0.0, 1.0)
-    pt = pf * actual_lambda + t * (1.0 - actual_lambda)
-
-    loss = torch.pow(torch.abs(pt - qf), 2.5).mean()
-    loss = loss * ((qf > pt) * 0.1 + 1)
-    loss = loss.mean()
-
+      lambda_ = 1.0 - torch.clamp(ply / ply_threshold, 0.0, 1.0)
+    result  = lambda_ * teacher_loss    + (1.0 - lambda_) * outcome_loss
+    entropy = lambda_ * teacher_entropy + (1.0 - lambda_) * outcome_entropy
+    loss = result.mean() - entropy.mean()
     self.log(loss_type, loss)
     return loss
 

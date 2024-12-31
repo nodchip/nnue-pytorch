@@ -64,14 +64,11 @@ def main():
   parser.add_argument("--smart-fen-skipping", action='store_true', dest='smart_fen_skipping', help="If enabled positions that are bad training targets will be skipped during loading. Default: False")
   parser.add_argument("--random-fen-skipping", default=0, type=int, dest='random_fen_skipping', help="skip fens randomly on average random_fen_skipping before using one.")
   parser.add_argument("--resume-from-model", dest='resume_from_model', help="Initializes training using the weights from the given .pt model")
-  parser.add_argument("--epoch-size", default=1000000, type=int, dest='epoch_size', help="epoch size.")
-  parser.add_argument("--in-scaling", default=240, type=int, dest='in_scaling', help="in-scaling.")
-  parser.add_argument("--out-scaling", default=280, type=int, dest='out_scaling', help="out-scaling.")
-  parser.add_argument("--offset", default=270, type=int, dest='offset', help="offset.")
   parser.add_argument("--network-save-period", type=int, default=1000000000, dest='network_save_period', help="Number of epochs between network snapshots. None to disable.")
   parser.add_argument("--label-smoothing-eps", default=0.0, type=float, dest='label_smoothing_eps', help="Label smoothing eps.")
   parser.add_argument("--num-batches-warmup", default=10000, type=int, dest='num_batches_warmup', help="Number of batches for warm-up.")
   parser.add_argument("--newbob-decay", default=0.5, type=float, dest='newbob_decay', help="Newbob decay.")
+  parser.add_argument("--epoch-size", default=10000000, type=int, dest='epoch_size', help="epoch size.")
   parser.add_argument("--num-epochs-to-adjust-lr", default=50, type=int, dest='num_epochs_to_adjust_lr', help="Number of epochs to adjust learning rate.")
   parser.add_argument("--score-scaling", default=361, type=float, dest='score_scaling', help="Score scaling.")
   parser.add_argument("--min-newbob-scale", default=1e-5, type=float, dest='min_newbob_scale', help="Minimum learning rate to stop the training.")
@@ -88,20 +85,17 @@ def main():
 
   if not args.resume_from_model:
     nnue = M.NNUE(
-      feature_set=feature_set, lambda_=args.lambda_, lr=args.lr,
-      label_smoothing_eps=args.label_smoothing_eps,
+      feature_set=feature_set, lambda_=args.lambda_,
+      lr=args.lr, label_smoothing_eps=args.label_smoothing_eps,
       num_batches_warmup=args.num_batches_warmup,
       newbob_decay=args.newbob_decay,
       num_epochs_to_adjust_lr=args.num_epochs_to_adjust_lr,
-      min_newbob_scale=args.min_newbob_scale, momentum=args.momentum,
-      in_scaling=args.in_scaling, out_scaling=args.out_scaling,
-      offset=args.offset)
+      score_scaling=args.score_scaling,
+      min_newbob_scale=args.min_newbob_scale, momentum=args.momentum)
   else:
     nnue = M.NNUE.load_from_checkpoint(args.resume_from_model, feature_set=feature_set)
     nnue.set_feature_set(feature_set)
-    nnue.in_scaling = args.in_scaling
-    nnue.out_scaling = args.out_scaling
-    nnue.offset = args.offset
+    nnue.lambda_ = args.lambda_
     # we can set the following here just like that because when resuming
     # from .pt the optimizer is only created after the training is started
     nnue.lr = args.lr
