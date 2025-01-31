@@ -70,9 +70,10 @@ def main():
   parser.add_argument("--newbob-decay", default=0.5, type=float, dest='newbob_decay', help="Newbob decay.")
   parser.add_argument("--epoch-size", default=10000000, type=int, dest='epoch_size', help="epoch size.")
   parser.add_argument("--num-epochs-to-adjust-lr", default=50, type=int, dest='num_epochs_to_adjust_lr', help="Number of epochs to adjust learning rate.")
-  parser.add_argument("--score-scaling", default=361, type=float, dest='score_scaling', help="Score scaling.")
   parser.add_argument("--min-newbob-scale", default=1e-5, type=float, dest='min_newbob_scale', help="Minimum learning rate to stop the training.")
   parser.add_argument("--momentum", default=0.0, type=float, dest='momentum', help="Momentum.")
+  parser.add_argument("--in-scaling", default=600.0, type=float, dest='in_scaling', help="Input net score scaling.")
+  parser.add_argument("--out-scaling", default=600.0, type=float, dest='out_scaling', help="Output teacher score scaling.")
   features.add_argparse_args(parser)
   args = parser.parse_args()
 
@@ -90,8 +91,8 @@ def main():
       num_batches_warmup=args.num_batches_warmup,
       newbob_decay=args.newbob_decay,
       num_epochs_to_adjust_lr=args.num_epochs_to_adjust_lr,
-      score_scaling=args.score_scaling,
-      min_newbob_scale=args.min_newbob_scale, momentum=args.momentum)
+      min_newbob_scale=args.min_newbob_scale, momentum=args.momentum, in_scaling=args.in_scaling,
+      out_scaling=args.out_scaling)
   else:
     nnue = M.NNUE.load_from_checkpoint(args.resume_from_model, feature_set=feature_set)
     nnue.set_feature_set(feature_set)
