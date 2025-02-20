@@ -8113,45 +8113,13 @@ namespace binpack
         }
     };
 
-    // ���ʎ��ɗ^����{�[�i�X�_���v�Z����B
-    Value CalculateEnteringKingBonus(const Position& pos, Color color) {
-        // �G�w
-        Bitboard ef = enemy_field(color);
-
-        // (b)�錾���̋ʂ��G�w�O�i�ڈȓ��ɓ����Ă���B
-        if (!(ef & pos.king_square(color)))
-            return VALUE_ZERO;
-
-        // (d)�錾���̓G�w�O�i�ڈȓ��̋�́A�ʂ�������10���ȏ㑶�݂���B
-        int p1 = (pos.pieces(color) & ef).pop_count();
-
-        // �G�w�ɂ�����̐�
-        int p2 = ((pos.pieces(color, BISHOP_HORSE, ROOK_DRAGON)) & ef).pop_count();
-
-        // ����1�_�A���5�_�A�ʏ���
-        // ���@�G�w�̎��� + �G�w�̎���̑��~4 - ��
-
-        // (c)
-        // �E���̏ꍇ28�_�ȏ�̎��_������B
-        // �E���̏ꍇ27�_�ȏ�̎��_������B
-        Hand h = pos.hand[color];
-        int score = p1 + p2 * 4 - 1
-            + hand_count(h, PAWN) + hand_count(h, LANCE) + hand_count(h, KNIGHT) + hand_count(h, SILVER)
-            + hand_count(h, GOLD) + (hand_count(h, BISHOP) + hand_count(h, ROOK)) * 5;
-        return static_cast<Value>(p1 + score);
-    }
-
-    constexpr const int EnteringKingBonusFactor = 20;
-
     [[nodiscard]] inline TrainingDataEntry packedSfenValueToTrainingDataEntry(const Learner::PackedSfenValue& psv)
     {
         TrainingDataEntry ret;
 
         ret.pos->set_from_packed_sfen(psv.sfen, &ret.stateInfo, Threads.main());
         ret.move = ret.pos->to_move(psv.move);
-        ret.score = psv.score
-            + CalculateEnteringKingBonus(*ret.pos, ret.pos->side_to_move()) * EnteringKingBonusFactor
-            - CalculateEnteringKingBonus(*ret.pos, ~ret.pos->side_to_move()) * EnteringKingBonusFactor;
+        ret.score = psv.score;
         ret.ply = psv.gamePly;
         ret.result = psv.game_result;
 
