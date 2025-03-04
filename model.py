@@ -135,7 +135,7 @@ class NNUE(pl.LightningModule):
       label_smoothing_eps=0.0, num_batches_warmup=10000, newbob_decay=0.5,
       num_epochs_to_adjust_lr=500, score_scaling=361, min_newbob_scale=1e-5, momentum=0.0):
     super(NNUE, self).__init__()
-    self.num_ls_buckets = 9
+    self.num_ls_buckets = 1
     self.input = nn.Linear(feature_set.num_features, L1)
     self.feature_set = feature_set
     self.layer_stacks = LayerStacks(self.num_ls_buckets)
