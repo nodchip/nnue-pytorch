@@ -8,9 +8,9 @@ import sys
 import math
 
 # 3 layer fully connected network
-L1 = 512
+L1 = 768
 L2 = 8
-L3 = 64
+L3 = 96
 
 class NNUE(pl.LightningModule):
   """
