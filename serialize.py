@@ -103,25 +103,59 @@ class NNUEWriter():
     std = data.to(torch.float).std().item()
     print(f'{mean=} {std=}')
 
+  def stochastic_round(self, x: torch.Tensor):
+    """
+    Stochastic rounding:
+      floor(x) with probability (ceil(x) - x)
+      ceil(x)  with probability (x - floor(x))
+
+    Returns integer tensor.
+    """
+    floor_x = torch.floor(x)
+    ceil_x = floor_x + 1
+    prob_up = x - floor_x  # 小数部分 → 切り上げ確率
+
+    # 0〜1 の一様乱数
+    rand = torch.rand_like(x)
+
+    # rand < prob_up → ceil にする
+    return torch.where(rand < prob_up, ceil_x, floor_x)
+
+
   def write_feature_transformer(self, model):
-    # int16 bias = round(x * 127)
-    # int16 weight = round(x * 127)
+    # --- bias の処理 ---
     layer = model.input
     bias = layer.bias.data
-    bias = bias.mul(127).round().to(torch.int16)
-    ascii_hist('ft bias:', bias.numpy())
-    self.save_histogram(f'{self.figure_index:02}_feature_transformer_bias.png', bias, 'bias', 'frequency', 'feature transformer bias')
+
+    # scale
+    bias_scaled = bias * 127.0   # float
+
+    # stochastic rounding → int16 に変換
+    bias_quant = self.stochastic_round(bias_scaled).to(torch.int16)
+
+    ascii_hist('ft bias:', bias_quant.numpy())
+    self.save_histogram(f'{self.figure_index:02}_feature_transformer_bias.png',
+                        bias_quant, 'bias', 'frequency', 'feature transformer bias')
     self.figure_index += 1
-    self.buf.extend(bias.flatten().numpy().tobytes())
+    self.buf.extend(bias_quant.flatten().numpy().tobytes())
 
     print(datetime.datetime.now())
+
+    # --- weight の処理 ---
     weight = self.coalesce_ft_weights(model, layer)
-    weight = weight.mul(127).round().to(torch.int16)
-    ascii_hist('ft weight:', weight.numpy())
-    self.save_histogram(f'{self.figure_index:02}_feature_transformer_weight.png', weight, 'weight', 'frequency', 'feature transformer weight')
+
+    weight_scaled = weight * 127.0  # float
+
+    # stochastic rounding
+    weight_quant = self.stochastic_round(weight_scaled).to(torch.int16)
+
+    ascii_hist('ft weight:', weight_quant.numpy())
+    self.save_histogram(f'{self.figure_index:02}_feature_transformer_weight.png',
+                        weight_quant, 'weight', 'frequency', 'feature transformer weight')
     self.figure_index += 1
-    # weights stored as [41024][256], so we need to transpose the pytorch [256][41024]
-    self.buf.extend(weight.transpose(0, 1).flatten().numpy().tobytes())
+
+    # NNUE 形式（転置して保存）
+    self.buf.extend(weight_quant.transpose(0, 1).flatten().numpy().tobytes())
     print(datetime.datetime.now())
     print()
 
@@ -129,39 +163,66 @@ class NNUEWriter():
     # FC layers are stored as int8 weights, and int32 biases
     kWeightScaleBits = 6
     kActivationScale = 127.0
-    if not is_output:
-      kBiasScale = (1 << kWeightScaleBits) * kActivationScale # = 8128
-    else:
-      kBiasScale = 9600.0 # kPonanzaConstant * FV_SCALE = 600 * 16 = 9600
-    kWeightScale = kBiasScale / kActivationScale # = 64.0 for normal layers
-    kMaxWeight = 127.0 / kWeightScale # roughly 2.0
 
-    # int32 bias = round(x * kBiasScale)
-    # int8 weight = round(x * kWeightScale)
+    if not is_output:
+      kBiasScale = (1 << kWeightScaleBits) * kActivationScale  # 8128
+    else:
+      kBiasScale = 9600.0  # output 層のみ Ponanza constant 版
+
+    kWeightScale = kBiasScale / kActivationScale  # = 64.0 (通常)
+    kMaxWeight = 127.0 / kWeightScale             # ≈ 2.0
+
+    # ==== Bias: fp32 → int32 (stochastic rounding) ====
     bias = layer.bias.data
-    bias = bias.mul(kBiasScale).round().to(torch.int32)
-    ascii_hist('fc bias:', bias.numpy())
-    self.save_histogram(f'{self.figure_index:02}_fully_connected_layer_bias.png', bias, 'bias', 'frequency', 'fully connected layer bias')
+    bias_scaled = bias * kBiasScale
+
+    # Stochastic rounding
+    bias_quant = self.stochastic_round(bias_scaled).to(torch.int32)
+
+    ascii_hist('fc bias:', bias_quant.numpy())
+    self.save_histogram(
+        f'{self.figure_index:02}_fully_connected_layer_bias.png',
+        bias_quant, 'bias', 'frequency', 'fully connected layer bias'
+    )
     self.figure_index += 1
-    self.buf.extend(bias.flatten().numpy().tobytes())
+    self.buf.extend(bias_quant.flatten().numpy().tobytes())
+
+
+    # ==== Weight: fp32 → int8 (clamp → stochastic rounding) ====
     weight = layer.weight.data
+
+    # clipping
     clipped = torch.count_nonzero(weight.clamp(-kMaxWeight, kMaxWeight) - weight)
     total_elements = torch.numel(weight)
     clipped_max = torch.max(torch.abs(weight.clamp(-kMaxWeight, kMaxWeight) - weight))
-    print("layer has {}/{} clipped weights. Exceeding by {} the maximum {}.".format(clipped, total_elements, clipped_max, kMaxWeight))
-    weight = weight.clamp(-kMaxWeight, kMaxWeight).mul(kWeightScale).round().to(torch.int8)
-    ascii_hist('fc weight:', weight.numpy())
-    self.save_histogram(f'{self.figure_index:02}_fully_connected_layer_weight.png', weight, 'weight', 'frequency', 'fully connected layer weight')
+    print(f"layer has {clipped}/{total_elements} clipped weights. "
+          f"Exceeding by {clipped_max} the maximum {kMaxWeight}.")
+
+    weight_clamped = weight.clamp(-kMaxWeight, kMaxWeight)
+
+    # scale to int8 range
+    weight_scaled = weight_clamped * kWeightScale
+
+    # stochastic rounding
+    weight_quant = self.stochastic_round(weight_scaled).to(torch.int8)
+
+    ascii_hist('fc weight:', weight_quant.numpy())
+    self.save_histogram(
+        f'{self.figure_index:02}_fully_connected_layer_weight.png',
+        weight_quant, 'weight', 'frequency', 'fully connected layer weight'
+    )
     self.figure_index += 1
-    # FC inputs are padded to 32 elements for simd.
-    num_input = weight.shape[1]
+
+    # ==== SIMD padding (32-byte alignment) ====
+    num_input = weight_quant.shape[1]
     if num_input % 32 != 0:
-      num_input += 32 - (num_input % 32)
-      new_w = torch.zeros(weight.shape[0], num_input, dtype=torch.int8)
-      new_w[:, :weight.shape[1]] = weight
-      weight = new_w
-    # Stored as [outputs][inputs], so we can flatten
-    self.buf.extend(weight.flatten().numpy().tobytes())
+      padded = ((num_input + 31) // 32) * 32
+      new_w = torch.zeros(weight_quant.shape[0], padded, dtype=torch.int8)
+      new_w[:, :num_input] = weight_quant
+      weight_quant = new_w
+
+    # Writer expects [outputs][inputs] flattened
+    self.buf.extend(weight_quant.flatten().numpy().tobytes())
     print()
 
   def int32(self, v):
