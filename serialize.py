@@ -103,12 +103,38 @@ class NNUEWriter():
     std = data.to(torch.float).std().item()
     print(f'{mean=} {std=}')
 
+  def round_away_from_zero(self, x):
+      # C++: v >= 0 ? ceil(v) : floor(v)
+      return torch.where(x >= 0, torch.ceil(x), torch.floor(x))
+
+  def stochastic_round_cpp(self, x):
+      """
+      Stochastic rounding that matches the C++ implementation:
+
+          auto n = abs(v - int(v));
+          if (rand > n)
+              v = trunc(v);
+          else
+              v = round_away_from_zero(v);
+
+      """
+      # fractional part (absolute)
+      integer_part = torch.trunc(x)
+      n = torch.abs(x - integer_part)
+
+      # random uniform [0,1)
+      rand = torch.rand_like(x)
+
+      # if (rand > n) → trunc
+      # else → round_away_from_zero
+      return torch.where(rand > n, integer_part, self.round_away_from_zero(x))
+
   def write_feature_transformer(self, model):
     # int16 bias = round(x * 127)
     # int16 weight = round(x * 127)
     layer = model.input
     bias = layer.bias.data
-    bias = bias.mul(127).round().to(torch.int16)
+    bias = self.stochastic_round_cpp(bias * 127).to(torch.int16)
     ascii_hist('ft bias:', bias.numpy())
     self.save_histogram(f'{self.figure_index:02}_feature_transformer_bias.png', bias, 'bias', 'frequency', 'feature transformer bias')
     self.figure_index += 1
@@ -116,7 +142,7 @@ class NNUEWriter():
 
     print(datetime.datetime.now())
     weight = self.coalesce_ft_weights(model, layer)
-    weight = weight.mul(127).round().to(torch.int16)
+    weight = self.stochastic_round_cpp(bias * 127).to(torch.int16)
     ascii_hist('ft weight:', weight.numpy())
     self.save_histogram(f'{self.figure_index:02}_feature_transformer_weight.png', weight, 'weight', 'frequency', 'feature transformer weight')
     self.figure_index += 1
@@ -139,7 +165,7 @@ class NNUEWriter():
     # int32 bias = round(x * kBiasScale)
     # int8 weight = round(x * kWeightScale)
     bias = layer.bias.data
-    bias = bias.mul(kBiasScale).round().to(torch.int32)
+    bias = self.stochastic_round_cpp(bias * kBiasScale).to(torch.int32)
     ascii_hist('fc bias:', bias.numpy())
     self.save_histogram(f'{self.figure_index:02}_fully_connected_layer_bias.png', bias, 'bias', 'frequency', 'fully connected layer bias')
     self.figure_index += 1
@@ -149,7 +175,7 @@ class NNUEWriter():
     total_elements = torch.numel(weight)
     clipped_max = torch.max(torch.abs(weight.clamp(-kMaxWeight, kMaxWeight) - weight))
     print("layer has {}/{} clipped weights. Exceeding by {} the maximum {}.".format(clipped, total_elements, clipped_max, kMaxWeight))
-    weight = weight.clamp(-kMaxWeight, kMaxWeight).mul(kWeightScale).round().to(torch.int8)
+    weight = self.stochastic_round_cpp(weight.clamp(-kMaxWeight, kMaxWeight) * kWeightScale).to(torch.int8)
     ascii_hist('fc weight:', weight.numpy())
     self.save_histogram(f'{self.figure_index:02}_fully_connected_layer_weight.png', weight, 'weight', 'frequency', 'fully connected layer weight')
     self.figure_index += 1
