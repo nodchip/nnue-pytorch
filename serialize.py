@@ -142,7 +142,7 @@ class NNUEWriter():
 
     print(datetime.datetime.now())
     weight = self.coalesce_ft_weights(model, layer)
-    weight = self.stochastic_round_cpp(bias * 127).to(torch.int16)
+    weight = self.stochastic_round_cpp(weight * 127).to(torch.int16)
     ascii_hist('ft weight:', weight.numpy())
     self.save_histogram(f'{self.figure_index:02}_feature_transformer_weight.png', weight, 'weight', 'frequency', 'feature transformer weight')
     self.figure_index += 1
