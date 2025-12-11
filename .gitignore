@@ -6,5 +6,5 @@ testing
 libtraining_data_loader.*
 easy_train_data
 *.yaml
-/nnue-pytorch/nnue-pytorch/.vs
-/nnue-pytorch/nnue-pytorch/nnue-pytorch/*.user
+/nnue-pytorch/.vs
+/nnue-pytorch/nnue-pytorch/*.user
