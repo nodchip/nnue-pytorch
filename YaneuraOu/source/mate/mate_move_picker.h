@@ -1,5 +1,5 @@
-﻿#ifndef MATE_MOVE_PICKER_H_INCLUDED
-#define MATE_MOVE_PICKER_H_INCLUDED
+﻿#ifndef __MATE_MOVE_PICKER_H_INCLUDED__
+#define __MATE_MOVE_PICKER_H_INCLUDED__
 
 #include "../config.h"
 
@@ -7,11 +7,9 @@
 
 #include "../position.h"
 #include "../evaluate.h" // CapturePieceValue
-#include "../movegen.h"
 
-namespace YaneuraOu {
-namespace Mate {
-
+namespace Mate
+{
 	// ===================================
 	//   MovePickerあとで改良する。
 	// ===================================
@@ -66,7 +64,7 @@ namespace Mate {
 			// 1. doGivesCheck==trueなのに、王手になる指し手ではない。
 			// 2. legalではない。
 			last = std::remove_if(moveList, last, [&](const auto& ml) {
-				return (doGivesCheck && !pos.gives_check(ml)) || !pos.legal(ml);
+				return (doGivesCheck && !pos.gives_check(ml.move)) || !pos.legal(ml.move);
 			});
 
 			// それぞれの指し手に対して点数をつける。
@@ -89,7 +87,7 @@ namespace Mate {
 
 				// and node側の玉の手番
 				Color king_color = ((us == BLACK) ^ or_node) ? BLACK : WHITE;
-				auto ksq = pos.square<KING>(king_color);
+				auto ksq = pos.king_square(king_color);
 
 				// 玉は下段のほうが詰ませやすいはずなので下段の玉に対して加点する。
 				// ※　詰将棋だと ksq = SQ_NBもありうる
@@ -137,10 +135,10 @@ namespace Mate {
 
 				for (auto& m : *this)
 				{
-					const Move move = m;
+					Move move = m.move;
 
 					// この指し手によって捕獲する駒
-					auto to  = move.to_sq();
+					auto to = to_sq(move);
 					auto cap = pos.piece_on(to);
 					// v : この指し手を指したあとの先手から見た駒割
 					int v = value + (cap == NO_PIECE ? 0 : - Eval::PieceValue[cap]*2);
@@ -148,7 +146,7 @@ namespace Mate {
 					auto pc = pos.moved_piece_after(move);
 
 					// 成れるなら、成る価値を加算
-					if (move.is_promote())
+					if (is_promote(move))
 						v += Eval::PieceValue[pc] - Eval::PieceValue[raw_of(pc)];
 
 #if 1
@@ -163,7 +161,7 @@ namespace Mate {
 					// 直後に取り返されそう..
 
 					// 駒打ちか？
-					bool drop = move.is_drop();
+					bool drop = is_drop(move);
 
 					if (lastTo != to)
 					{
@@ -171,7 +169,7 @@ namespace Mate {
 						lastTo = to;
 
 						// 味方の利きの数、敵の利きの数
-						our_effect   = pos.attackers_to( us, to).pop_count();
+						our_effect = pos.attackers_to(us, to).pop_count();
 						their_effect = pos.attackers_to(~us, to).pop_count();
 					}
 
@@ -232,9 +230,8 @@ namespace Mate {
 		ExtMove moveList[MaxCheckMoves];
 		ExtMove* last;
 	};
-} // namespace Mate
-} // namespace YaneuraOu
+}
+#endif
 
-#endif // defined(USE_MATE_SOLVER) || defined(USE_MATE_DFPN)
 
-#endif // MATE_MOVE_PICKER_H_INCLUDED
+#endif // ndef __MATE_MOVE_PICKER_H_INCLUDED__

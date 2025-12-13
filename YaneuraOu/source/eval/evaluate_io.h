@@ -6,8 +6,8 @@
 #include "../types.h"
 #include <vector>
 
-namespace YaneuraOu {
-namespace EvalIO {
+namespace EvalIO
+{
 
 	// 特徴因子名
 	// "VAR"は一次元配列。
@@ -198,9 +198,8 @@ namespace EvalIO {
 	// input.fe_end < output.fe_endのように、fe_endを拡張するとき、
 	// mapを引数で渡して、拡張された領域が元の領域とどう対応するのか表現する必要がある。
 	//
-	bool eval_convert(const EvalInfo& input, const EvalInfo& output, const std::vector<u16 /*BonaPiece*/>* map);
+	extern bool eval_convert(const EvalInfo& input, const EvalInfo& output, const std::vector<u16 /*BonaPiece*/>* map);
 
-} // namespace EvalIO
-} // namespace YaneuraOu
+}
 
 #endif // _EVALUATE_IO_H_

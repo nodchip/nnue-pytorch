@@ -6,9 +6,8 @@
 
 #include "nn_types.h"
 
-namespace YaneuraOu {
-namespace Eval::dlshogi {
-
+namespace Eval::dlshogi
+{
 	// ニューラルネットの基底クラス
 	class NN
 	{
@@ -43,7 +42,6 @@ namespace Eval::dlshogi {
 	};
 
 } // namespace Eval::dlshogi
-} // namespace YaneuraOu
 
 #endif // defined(YANEURAOU_ENGINE_DEEP)
 #endif // ndef __NN_H_INCLUDED__

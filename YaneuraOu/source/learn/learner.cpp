@@ -74,7 +74,6 @@
 #endif
 
 using namespace std;
-namespace YaneuraOu {
 
 // これは探索部で定義されているものとする。
 extern Book::BookMoveSelector book;
@@ -219,7 +218,7 @@ struct SfenWriter
 			{
 				for (auto ptr : buffers)
 				{
-					fs.write(reinterpret_cast<const char*>(ptr->data()), sizeof(PackedSfenValue) * ptr->size());
+					fs.write((const char*)&((*ptr)[0]), sizeof(PackedSfenValue) * ptr->size());
 
 					sfen_write_count += ptr->size();
 
@@ -367,7 +366,7 @@ void MultiThinkGenSfen::thread_worker(size_t thread_id)
 	StateInfo si;
 
 	// 今回の指し手。この指し手で局面を進める。
-	Move m = Move::none();
+	Move m = MOVE_NONE;
 
 	// 終了フラグ
 	bool quit = false;
@@ -381,13 +380,13 @@ void MultiThinkGenSfen::thread_worker(size_t thread_id)
 		auto th = Threads[thread_id];
 
 		auto& pos = th->rootPos;
-		pos.set_hirate(&si);
+		pos.set_hirate(&si,th);
 
 		// 自分スレッド用の置換表があるはずなので自分の置換表だけをクリアする。
 		th->tt.clear();
 
 		// 探索部で定義されているBookMoveSelectorのメンバを参照する。
-		auto& book = YaneuraOu::book;
+		auto& book = ::book;
 
 		// 1局分の局面を保存しておき、終局のときに勝敗を含めて書き出す。
 		// 書き出す関数は、この下にあるflush_psv()である。
@@ -495,7 +494,7 @@ void MultiThinkGenSfen::thread_worker(size_t thread_id)
 			}
 
 			// 宣言勝ち
-			if (pos.DeclarationWin() != Move::none())
+			if (pos.DeclarationWin() != MOVE_NONE)
 			{
 				// (この局面の一つ前の局面までは書き出す)
 				flush_psv(1);
@@ -503,7 +502,7 @@ void MultiThinkGenSfen::thread_worker(size_t thread_id)
 			}
 
 			// 定跡
-			if ((m = book.probe(pos)) != Move::none())
+			if ((m = book.probe(pos)) != MOVE_NONE)
 			{
 				// 定跡にhitした。
 				// その指し手はmに格納された。
@@ -548,7 +547,7 @@ void MultiThinkGenSfen::thread_worker(size_t thread_id)
 
 				// おかしな指し手の検証
 				if (pv1.size() > 0
-					&& (pv1[0] == Move::resign() || pv1[0] == Move::win() || pv1[0] == Move::none())
+					&& (pv1[0] == MOVE_RESIGN || pv1[0] == MOVE_WIN || pv1[0] == MOVE_NONE)
 					)
 				{
 					// MOVE_WINは、この手前で宣言勝ちの局面であるかチェックしているので
@@ -697,7 +696,7 @@ void MultiThinkGenSfen::thread_worker(size_t thread_id)
 					// PVの初手を取り出す。これはdepth 0でない限りは存在するはず。
 					ASSERT_LV3(pv_value1.second.size() >= 1);
 					Move pv_move1 = pv_value1.second[0];
-					psv.move = pv_move1.to_u16();
+					psv.move = pv_move1;
 				}
 
 			SKIP_SAVE:;
@@ -787,7 +786,7 @@ void MultiThinkGenSfen::thread_worker(size_t thread_id)
 					m = rm[prng.rand(s)].pv[0];
 
 					// まだ1局面も書き出していないのに終局してたので書き出し処理は端折って次の対局に。
-					if (!m.is_ok())
+					if (!is_ok(m))
 						break;
 				}
 
@@ -1510,7 +1509,7 @@ struct LearnerThink: public MultiThink
 		newbob_scale = 1.0;
 		newbob_decay = 1.0;
 		newbob_num_trials = 2;
-		best_loss = std::numeric_limits<double>::max();
+		best_loss = std::numeric_limits<double>::infinity();
 		latest_loss_sum = 0.0;
 		latest_loss_count = 0;
 #endif
@@ -1626,7 +1625,7 @@ void LearnerThink::calc_loss(size_t thread_id, u64 done)
 	auto th = Threads[thread_id];
 	auto& pos = th->rootPos;
 	StateInfo si;
-	pos.set_hirate(&si);
+	pos.set_hirate(&si,th);
 	std::cout << "hirate eval = " << Eval::evaluate(pos);
 
 	//Eval::print_eval_stat(pos);
@@ -1741,7 +1740,7 @@ void LearnerThink::calc_loss(size_t thread_id, u64 done)
 				// 教師の指し手と浅い探索のスコアが一致するかの判定
 				{
 					auto r = search(pos, 1);
-					if (r.second[0].to_u16() == ps.move)
+					if ((u16)r.second[0] == ps.move)
 						++local_move_accord_count;
 				}
 			}
@@ -2006,7 +2005,7 @@ void LearnerThink::thread_worker(size_t thread_id)
 		// 全駒されて詰んでいる可能性がある。
 		// また宣言勝ちの局面はPVの指し手でleafに行けないので学習から除外しておく。
 		// (そのような教師局面自体を書き出すべきではないのだが古い生成ルーチンで書き出しているかも知れないので)
-		if (pos.is_mated() || pos.DeclarationWin() != Move::none())
+		if (pos.is_mated() || pos.DeclarationWin() != MOVE_NONE)
 			goto RetryRead;
 
 		// 読み込めたので試しに表示してみる。
@@ -2315,7 +2314,7 @@ void shuffle_files(const vector<string>& filenames , const string& output_file_n
 		// ファイルに書き出す
 		fstream fs;
 		fs.open(make_filename(write_file_count++), ios::out | ios::binary);
-		fs.write((char*)buf.data(), size * sizeof(PackedSfenValue));
+		fs.write((char*)&buf[0], size * sizeof(PackedSfenValue));
 		fs.close();
 		a_count.push_back(size);
 
@@ -2928,7 +2927,6 @@ void learn(Position&, istringstream& is)
 
 
 } // namespace Learner
-} // namespace YaneuraOu
 
 #if defined(EVAL_LEARN) && defined(GENSFEN2019)
 
@@ -2942,9 +2940,8 @@ void learn(Position&, istringstream& is)
 
 using namespace std;
 
-namespace YaneuraOu {
-namespace {
-
+namespace
+{
 	// C#のstring.Split()みたいなの
 	vector<string> split(const string &s, char delim) {
 		vector<string> elems;
@@ -2957,7 +2954,7 @@ namespace {
 		}
 		return elems;
 	}
-} // namespace
+}
 
 namespace Learner {
 
@@ -3008,7 +3005,7 @@ namespace Learner {
 		// 1手進める関数
 		void do_move(Position& pos , Move move, StateInfo* states)
 		{
-			ASSERT_LV3(move.is_ok() && pos.pseudo_legal(move) && pos.legal(move));
+			ASSERT_LV3(is_ok(move) && pos.pseudo_legal(move) && pos.legal(move));
 
 			pos.do_move(move, states[pos.game_ply()]);
 
@@ -3086,7 +3083,7 @@ namespace Learner {
 
 		auto my_do_move = [&move, &pos, &states ,&count , &line_number , &book_sfens ]()
 		{
-			ASSERT_LV3(move.is_ok() && pos.pseudo_legal(move) && pos.legal(move));
+			ASSERT_LV3(is_ok(move) && pos.pseudo_legal(move) && pos.legal(move));
 
 			ASSERT_LV3(pos.game_ply() != 0);
 			pos.do_move(move, states[pos.game_ply()]);
@@ -3124,7 +3121,7 @@ namespace Learner {
 
 			auto book_moves = split(book_line, ' ');
 
-			pos.set_hirate(&states[0]);
+			pos.set_hirate(&states[0], th);
 
 			// "startpos moves"を読み飛ばしてそこ以降の指し手文字列で指し手を進める
 			for (int book_move_index = 2; book_move_index < (int)book_moves.size()
@@ -3133,8 +3130,8 @@ namespace Learner {
 			{
 				// /* 詰みの局面もゴミでしかない。1手詰め、宣言勝ちの局面も除外。*/
 				if (pos.is_mated()
-					|| (!pos.checkers() && Mate::mate_1ply(pos) != Move::none())
-					|| pos.DeclarationWin() != Move::none()
+					|| (!pos.checkers() && Mate::mate_1ply(pos) != MOVE_NONE)
+					|| pos.DeclarationWin() != MOVE_NONE
 					)
 					break;
 
@@ -3142,7 +3139,7 @@ namespace Learner {
 				auto book_move = book_moves[book_move_index];
 				move = USI::to_move(pos, book_move);
 				// 信用できない定跡の場合、このチェックが必要。
-				if (!move.is_ok() || !pos.pseudo_legal(move) || !pos.legal(move))
+				if (!is_ok(move) || !pos.pseudo_legal(move) || !pos.legal(move))
 					break;
 
 				my_do_move();
@@ -3183,7 +3180,7 @@ namespace Learner {
 
 		for(int i=0;i< random_move_ply;++i)
 		{
-			Move move = Move::none();
+			Move move = MOVE_NONE;
 			MoveList<LEGAL> legal_moves(pos);
 			if (legal_moves.size() == 0)
 				goto Retry;
@@ -3210,15 +3207,15 @@ namespace Learner {
 #endif
 
 			// 玉を移動する指し手ではなかったので全合法手のなかから指し手を選択する。
-			if (move == Move::none())
-				move = Move(legal_moves.at(prng.rand(legal_moves.size())));
+			if (move == MOVE_NONE)
+				move = legal_moves.at(prng.rand(legal_moves.size())).move;
 
 			do_move(pos, move, states);
 
 			// 詰みの局面、1手詰めの局面を除外
 			if (pos.is_mated()
-				|| (!pos.checkers() && Mate::mate_1ply(pos) != Move::none())
-				|| pos.DeclarationWin() != Move::none()
+				|| (!pos.checkers() && Mate::mate_1ply(pos) != MOVE_NONE)
+				|| pos.DeclarationWin() != MOVE_NONE
 				)
 				goto Retry;
 		}
@@ -3281,7 +3278,7 @@ namespace Learner {
 
 			// 対局シミュレーションのループ
 			while (pos.game_ply() < MAX_PLY2
-				&& !pos.is_mated() && pos.DeclarationWin() == Move::none()
+				&& !pos.is_mated() && pos.DeclarationWin() == MOVE_NONE
 				&& pos.is_repetition() != REPETITION_DRAW /* 千日手 */)
 			{
 				// -- 普通に探索してその指し手で局面を進める。
@@ -3319,7 +3316,7 @@ namespace Learner {
 					psv.game_result = (s8)pos.side_to_move();
 					
 					// PVの初手を取り出す。これはdepth 0でない限りは存在するはず。
-					psv.move = pv[0].to_u16();
+					psv.move = (u16)pv[0];
 				}
 
 				// search_depth手読みの指し手で局面を進める。
@@ -3343,7 +3340,7 @@ namespace Learner {
 				// 詰まされた
 				win = ~pos.side_to_move();
 			}
-			else if (pos.DeclarationWin() != Move::none()) {
+			else if (pos.DeclarationWin() != MOVE_NONE) {
 				// 勝ち
 				// 入玉勝利
 				win = pos.side_to_move();
@@ -3395,7 +3392,7 @@ namespace Learner {
 	}
 
 	// gensfen2019コマンド本体
-	void gen_sfen2019([[maybe_unused]] Position& pos, [[maybe_unused]] istringstream& is)
+	void gen_sfen2019(Position& pos, istringstream& is)
 	{
 		// スレッド数(これは、USIのsetoptionで与えられる)
 		u32 thread_num = (u32)Options["Threads"];
@@ -3538,9 +3535,7 @@ namespace Learner {
 #endif
 
 	}
-
-} // namespace Learner
-} // namespace YaneuraOu
+}
 
 #endif // defined(EVAL_LEARN) && defined(GENSFEN2019)
 

@@ -1,8 +1,8 @@
 ﻿// NNUE evaluation function layer InputSlice definition
 // NNUE評価関数の層InputSliceの定義
 
-#ifndef CLASSIC_NNUE_LAYERS_INPUT_SLICE_H_INCLUDED
-#define CLASSIC_NNUE_LAYERS_INPUT_SLICE_H_INCLUDED
+#ifndef NNUE_LAYERS_INPUT_SLICE_H_INCLUDED
+#define NNUE_LAYERS_INPUT_SLICE_H_INCLUDED
 
 #include "../../../config.h"
 
@@ -10,7 +10,6 @@
 
 #include "../nnue_common.h"
 
-namespace YaneuraOu {
 namespace Eval::NNUE::Layers {
 
 // Input layer
@@ -51,8 +50,8 @@ class InputSlice {
   }
 
   // パラメータを読み込む
-  Tools::Result ReadParameters(std::istream& /*stream*/) {
-    return Tools::ResultCode::Ok;
+  bool ReadParameters(std::istream& /*stream*/) {
+    return true;
   }
 
   // パラメータを書き込む
@@ -71,8 +70,7 @@ class InputSlice {
  private:
 };
 
-} // namespace Eval::NNUE::Layers
-} // namespace YaneuraOu
+}  // namespace Eval::NNUE::Layers
 
 #endif  // defined(EVAL_NNUE)
 

@@ -21,9 +21,6 @@
 #include "../book/book.h"
 #include "../learn/learn.h"
 #include "../mate/mate.h"
-#include "../evaluate.h"
-#include "../engine.h"
-#include "../movegen.h"
 
 // これもおまけしておく。
 using namespace std;

@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の学習クラステンプレートのFeatureTransformer用特殊化
 
-#ifndef CLASSIC_NNUE_TRAINER_FEATURE_TRANSFORMER_H
-#define CLASSIC_NNUE_TRAINER_FEATURE_TRANSFORMER_H
+#ifndef _NNUE_TRAINER_FEATURE_TRANSFORMER_H_
+#define _NNUE_TRAINER_FEATURE_TRANSFORMER_H_
 
 #include "../../../config.h"
 
@@ -22,8 +22,9 @@
 #include <omp.h>
 #endif
 
-namespace YaneuraOu {
-namespace Eval::NNUE {
+namespace Eval {
+
+namespace NNUE {
 
 // 学習：入力特徴量変換器
 template <>
@@ -395,8 +396,9 @@ class Trainer<FeatureTransformer> {
   LearnFloatType max_activations_[kHalfDimensions];
 };
 
-} // namespace Eval::NNUE
-} // namespace YaneuraOu
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_LEARN) && defined(EVAL_NNUE)
 

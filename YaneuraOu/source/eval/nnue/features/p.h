@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の入力特徴量Pの定義
 
-#ifndef CLASSIC_NNUE_FEATURES_P_H
-#define CLASSIC_NNUE_FEATURES_P_H
+#ifndef _NNUE_FEATURES_P_H_
+#define _NNUE_FEATURES_P_H_
 
 #include "../../../config.h"
 
@@ -10,8 +10,11 @@
 #include "../../../evaluate.h"
 #include "features_common.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE::Features {
+namespace Eval {
+
+namespace NNUE {
+
+namespace Features {
 
 // 特徴量P：玉以外の駒のBonaPiece
 class P {
@@ -36,8 +39,11 @@ class P {
                                    IndexList* removed, IndexList* added);
 };
 
-} // namespace Eval::NNUE::Features
-} // namespace YaneuraOu
+}  // namespace Features
+
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_NNUE)
 

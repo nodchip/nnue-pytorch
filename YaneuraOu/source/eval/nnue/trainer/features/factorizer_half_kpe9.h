@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の特徴量変換クラステンプレートのHalfKPE9用特殊化
 
-#ifndef CLASSIC_NNUE_TRAINER_FEATURES_FACTORIZER_HALF_KPE9_H
-#define CLASSIC_NNUE_TRAINER_FEATURES_FACTORIZER_HALF_KPE9_H
+#ifndef _NNUE_TRAINER_FEATURES_FACTORIZER_HALF_KPE9_H_
+#define _NNUE_TRAINER_FEATURES_FACTORIZER_HALF_KPE9_H_
 
 #include "../../../../config.h"
 
@@ -14,8 +14,11 @@
 #include "../../features/half_relative_kp.h"
 #include "factorizer.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE::Features {
+namespace Eval {
+
+namespace NNUE {
+
+namespace Features {
 
 // 入力特徴量を学習用特徴量に変換するクラステンプレート
 // HalfKPE9用特殊化
@@ -117,8 +120,11 @@ class Factorizer<HalfKPE9<AssociatedKing>> {
 template <Side AssociatedKing>
 constexpr FeatureProperties Factorizer<HalfKPE9<AssociatedKing>>::kProperties[];
 
-} // namespace Eval::NNUE::Features
-} // namespace YaneuraOu
+}  // namespace Features
+
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_NNUE)
 

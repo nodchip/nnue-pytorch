@@ -1,234 +1,195 @@
 ﻿#ifndef USI_H_INCLUDED
 #define USI_H_INCLUDED
 
-#include <cstddef>
-#include <iosfwd>
 #include <map>
-#include <string>
+//#include <string>
+#include <vector>
+#include <functional>	// function
 
 #include "types.h"
-#include "engine.h"
 #include "position.h"
-#include "testcmd/unit_test.h"
-
-namespace YaneuraOu {
 
 // --------------------
 //     USI関連
 // --------------------
 
-// USIEngine本体。
-// このclassがEngineを内包していて、USIメッセージのハンドラを処理して
-// 内包しているEngineに対して司令を送る。
-class USIEngine {
-public:
+namespace USI
+{
+	class Option;
 
-#if STOCKFISH
-	// 📝 やねうら王では、CommandLine::gを見れば良いので、argc,argvは引数として渡さないことにした。
-	//     また、ここでやっている初期化は不要になったのでコンストラクタ自体を削除。
-	USIEngine(int argc, char** argv);
-#else
-	 // USIEngine classから使うEngine。
-	 // 📌 やねうら王独自。エンジンの実装を変更できるように、
-	 //     IEngine(エンジン interface)を渡し、エンジンを動的に切り替えたり、
-	 //     複数の異なるエンジンから成るUSIEngineを同時に使うことができるようにする。
-	 void set_engine(IEngine& _engine);
+	// UCIではオプションはcase insensitive(大文字・小文字の区別をしない)なのでcustom comparatorを用意する。
+	// USIではここがプロトコル上どうなっているのかはわからないが、同様の処理にしておく。
+	struct CaseInsensitiveLess {
+		bool operator() (const std::string&, const std::string&) const;
+	};
+
+	// USIのoption名と、それに対応する設定内容を保持しているclass。実体はstd::map
+	typedef std::map<std::string, Option , CaseInsensitiveLess> OptionsMap;
+
+	// USIプロトコルで指定されるoptionの内容を保持するclass
+	class Option {
+
+		// USIプロトコルで"setoption"コマンドが送られてきたときに呼び出されるハンドラの型。
+		//		typedef void(*OnChange)(const Option&);
+		// Stockfishでは↑のように関数ポインタになっているが、
+		// これだと[&](o){...}みたいなlambda式を受けられないのでここはstd::functionを使うべきだと思う。
+		typedef std::function<void(const Option&)> OnChange;
+
+	public:
+		// (GUI側のエンジン設定画面に出てくる)ボタン
+		Option(OnChange f = nullptr);
+		
+		// 文字列
+		Option(const char* v, OnChange f = nullptr);
+		
+		// (GUI側のエンジン設定画面に出てくる)CheckBox。bool型のoption デフォルト値が v
+		Option(bool v, OnChange f = nullptr);
+		
+		// (GUI側のエンジン設定画面に出てくる)SpinBox。s64型。
+		// Stockfishではdouble型になっているけども、GUI側がdoubleを受け付けるようになっていない可能性があるし、
+		// doubleだと仮数部が52bitしかないので64bitの値を指定できなくて嫌だというのもある。
+		// ゆえに、doubleはサポートせずにs64のみを扱う。
+		Option(s64 v, s64 minv, s64 maxv, OnChange = nullptr);
+		
+		// (GUI側のエンジン設定画面に出てくる)ComboBox。内容的には、string型と同等。
+		// list = コンボボックスに表示する値。v = デフォルト値かつ現在の値
+		// StockfishにはComboBoxの取扱いがないようなのだが、これは必要だと思うのでやねうら王では独自に追加する。
+		Option(const std::vector<std::string>&list, const std::string& v, OnChange f = nullptr);
+
+		// USIプロトコル経由で値を設定されたときにそれをcurrentValueに反映させる。
+		Option& operator=(const std::string&);
+
+		// 起動時に設定を代入する。
+		void operator<<(const Option&);
+
+		// s64型への暗黙の変換子
+		operator s64() const;
+
+		// string型への暗黙の変換子
+		// typeが"string"型のとき以外であっても何であれ変換できるようになっているほうが便利なので
+		// 変換できるようにしておく。
+		operator std::string() const;
+
+		// case insensitiveにしないといけないので比較演算子は独自に用意する。
+		bool operator==(const char*) const;
+
+		// idxの値を変えずに上書きする。
+		// ※　やねうら王、独自拡張。
+		// コマンド文字列からOptionのインスタンスを構築する時にこの機能が必要となる。
+		void overwrite(const Option&);
+
+		// 既存のOptionの上書き。
+		// min = max = default = param になる。
+		void overwrite(const std::string& param);
+
+
+	private:
+		friend std::ostream& operator<<(std::ostream& os, const OptionsMap& om);
+
+		std::string defaultValue, currentValue, type;
+
+		// s64型のときの最小と最大
+		// Stockfishではintになっているが、node limitなどs64の範囲の値を扱いたいのでやねうら王では拡張してある。
+		s64 min, max;
+
+		// 出力するときの順番。この順番に従ってGUIの設定ダイアログに反映されるので順番重要！
+		size_t idx;
+
+		// combo boxのときの表示する文字列リスト
+		std::vector<std::string> list;
+
+		// 値が変わったときに呼び出されるハンドラ
+		OnChange on_change;
+	};
+
+	// optionのdefault値を設定する。
+	void init(OptionsMap&);
+
+	// USIメッセージ応答部(起動時に、各種初期化のあとに呼び出される)
+	void loop(int argc, char* argv[]);
+
+#if defined(USE_PIECE_VALUE)
+	// USIプロトコルの形式でValue型を出力する。
+	// 歩が100になるように正規化するので、operator <<(Value)をこういう仕様にすると
+	// 実際の値と異なる表示になりデバッグがしにくくなるから、そうはしていない。
+	// USE_PIECE_VALUEが定義されていない時は正規化しようがないのでこの関数は呼び出せない。
+	std::string value(Value v);
 #endif
 
-	// main threadをUSIメッセージの受信のために待機させる。
-	// "quit"コマンドが送られてくるまでこのループは抜けない。
-	void loop();
+	// Square型をUSI文字列に変換する
+	std::string square(Square s);
 
-	// --------------------
-	// USI関係の記法変換部
-	// --------------------
+	// 指し手をUSI文字列に変換する。
+	std::string move(Move   m /*, bool chess960*/);
+	std::string move(Move16 m /*, bool chess960*/);
 
-	// 詰みやそれに類似した特別なスコアの処理なしに、Valueを整数のセントポーン数に変換する。
-#if STOCKFISH
-	static int         to_cp(Value v, const Position& pos);
-    // 📝 やねうら王では、Position&は不要。
-#else
-	static int   to_cp(Value v);
+	// 読み筋をUSI文字列化して返す。
+	// " 7g7f 8c8d" のように返る。
+	std::string move(const std::vector<Move>& moves);
+
+	// pv(読み筋)をUSIプロトコルに基いて出力する。
+	// depth : 反復深化のiteration深さ。
+	std::string pv(const Position& pos, Depth depth, Value alpha, Value beta);
+
+	// 局面posとUSIプロトコルによる指し手を与えて
+	// もし可能なら等価で合法な指し手を返す。
+	// 合法でないときはMOVE_NONEを返す。(この時、エラーである旨を出力する。)
+	// "resign"に対してはMOVE_RESIGNを返す。
+	// Stockfishでは第二引数にconstがついていないが、これはつけておく。
+	// 32bit Moveが返る。(Move16ではないことに注意)
+	Move to_move(const Position& pos, const std::string& str);
+
+	// -- 以下、やねうら王、独自拡張。
+
+	// 合法かのテストはせずにともかく変換する版。
+	// 返ってくるのは16bitのMoveなので、これを32bitのMoveに変換するには
+	// Position::move16_to_move()を呼び出す必要がある。
+	// Stockfishにはない関数だが、高速化を要求されるところで欲しいので追加する。
+	Move16 to_move16(const std::string& str);
+
+	// USIプロトコルで、idxの順番でoptionを出力する。(デバッグ用)
+	std::ostream& operator<<(std::ostream& os, const OptionsMap& om);
+
+	// USIに追加オプションを設定したいときは、この関数を定義すること。
+	// USI::init()のなかからコールバックされる。
+	void extra_option(USI::OptionsMap& o);
+
+	// 評価関数を読み込んだかのフラグ。これはevaldirの変更にともなってfalseにする。
+	extern bool load_eval_finished; // = false;
+
+#if defined (USE_ENTERING_KING_WIN)
+	// 入玉ルール文字列をEnteringKingRule型に変換する。
+	extern EnteringKingRule to_entering_king_rule(const std::string& rule);
 #endif
 
-    // USIプロトコルで用いるscoreにScore構造体の内容を変換する。
-    static std::string format_score(const Score& s);
+	// エンジンオプションをコンパイル時に設定する機能
+	// "ENGINE_OPTIONS"で指定した内容を設定する。
+	// 例) #define ENGINE_OPTIONS "FV_SCALE=24;BookFile=no_book"
+	extern void set_engine_options(const std::string& options);
 
-	// USIプロトコルで使うマス目文字列に変換する。
-    static std::string square(Square s);
+	// エンジンオプションのoverrideのためにファイルから設定を読み込む。
+	// 1) これは起動時に"engine_options.txt"という設定ファイルを読み込むのに用いる。
+	// 2) "isready"応答に対して、EvalDirのなかにある"eval_options.txt"という設定ファイルを読み込むのにも用いる。
+	extern void read_engine_options(const std::string& filename);
 
-    // USIプロトコルで使う指し手文字列に変換する。
-    static std::string move(Move m /*, bool chess960*/);
+	// namespace USI内のUnitTest。
+	extern void UnitTest(Test::UnitTester& tester);
+}
 
-#if STOCKFISH
-    // 勝率文字列に変換する。
-    // 📌 将棋では評価値をcpで出力するので不要。
-    static std::string wdl(Value v, const Position& pos);
-#endif
+// USIのoption設定はここに保持されている。
+extern USI::OptionsMap Options;
 
-	// string全体を小文字化して返す。
-    static std::string to_lower(std::string str);
+// === やねうら王独自実装 ===
 
-    // USIの指し手文字列をMove型の変換する。
-    // 合法手でなければMove::noneを返すようになっている。
-    // 💡 合法でない指し手の場合、エラーである旨を出力する。
-    static Move to_move(const Position& pos, std::string str);
+// USIの"isready"コマンドが呼び出されたときの処理。このときに評価関数の読み込みなどを行なう。
+// benchmarkコマンドのハンドラなどで"isready"が来ていないときに評価関数を読み込ませたいときに用いる。
+// skipCorruptCheck == trueのときは評価関数の2度目の読み込みのときのcheck sumによるメモリ破損チェックを省略する。
+// ※　この関数は、Stockfishにはないがないと不便なので追加しておく。
+extern void is_ready(bool skipCorruptCheck = false);
 
-#if !STOCKFISH
-	// USI形式から指し手への変換。本来この関数は要らないのだが、
-    // 棋譜を大量に読み込む都合、この部分をそこそこ高速化しておきたい。
-    static Move16 to_move16(const std::string& str);
-#endif
+// positionコマンドのparserを呼び出したいことがあるので外部から呼び出せるようにしておく。
+// 使い方はbenchコマンド(benchmark.cpp)のコードを見てほしい。
+extern void position_cmd(Position& pos, std::istringstream& is, StateListPtr& states);
 
-	// "go"の後続文字列を解析して、それを反映させたSearch::LimitsTypeを返す。
-    /*
-	   📓 やねうら王のほうはoptions["DepthLimit"], options["NodesLimit"] を
-	       参照したいので、OptionsMap&が必要になり、これはUSIEngineが持っているので
-	       このmethodをstaticにできない。
-	*/
-#if STOCKFISH
-    static Search::LimitsType parse_limits(std::istream& is);
-#else
-    Search::LimitsType parse_limits(std::istream& is);
-#endif
-
-    // エンジンオプション設定を取得する
-    OptionsMap& engine_options() { return engine.get_options(); }
-
-#if !STOCKFISH
-    // --------------------
-    // 🌈 やねうら王独自 🌈
-    // --------------------
-
-	// cpからValueへ。to_cpの逆変換。
-	static Value cp_to_value(int v);
-
-	// スコアを歩の価値を100として正規化して出力する。
-	// MATEではないスコアなら"cp x"のように出力する。
-	// MATEのスコアなら、"mate x"のように出力する。
-	// 
-	// ⚠ USE_PIECE_VALUEが定義されていない時は正規化しようがないのでこの関数は呼び出せない。
-	static std::string value(Value v);
-
-    // USIの指し手文字列などに使われている盤上の升を表す文字列をSquare型に変換する
-    // 変換できなかった場合はSQ_NBが返る。高速化のために用意した。
-    static Square usi_to_sq(char f, char r);
-
-    // USIプロトコルのマス目文字列をSquare型に変換する。
-    // 変換できない文字である場合、SQ_NBを返す。
-    static Square to_square(const std::string& str);
-
-    // Move16をUSIプロトコルで使う文字列に変換する。
-    static std::string move(Move16 m /*, bool chess960*/);
-
-    // vector<Move>をUSIプロトコルで使う文字列に変換する。
-    static std::string move(const std::vector<Move>& moves);
-
-	// USIコマンドを積むことができる標準入力
-	// 💡 ここにUSIコマンドを積むとそれが実行される。
-	StandardInput std_input;
-
-	// このclassのUnitTest。
-	static void UnitTest(Test::UnitTester& tester, IEngine& engine);
-#endif
-
-private:
-	// 内包している思考エンジン
-#if STOCKFISH
-	// main関数にコマンドラインから渡された引数
-	Engine engine;
-
-	CommandLine cli;
-	// 🌈 やねうら王では、CommandLine::gを用いるから、このclassが保持する必要がない。
-#else
-	// 🌈 やねうら王ではengineを切り替えられるようにIEngineをくるんだ
-	//     EngineWrapperというclassを用いる。
-	EngineWrapper engine;
-#endif
-
-	// string_viewを"\n"で複数行に分割して、それを"info string .."の形で出力する。
-	static void print_info_string(std::string_view str);
-
-	// --------------------
-	// USI command handlers
-	// --------------------
-
-	// USIプロトコルのコマンドに対応するhandler
-	// USIプロトコルのコマンド名がそのまま関数名になっている。
-
-	void          go(std::istringstream& is);
-	void          bench(std::istream& args);
-	void          benchmark(std::istream& args);
-	void          position(std::istringstream& is);
-	void          setoption(std::istringstream& is);
-	std::uint64_t perft(const Search::LimitsType&);
-
-#if !STOCKFISH
-	// 🌈 やねうら王独自拡張 🌈
-
-	void isready();
-    void moves();
-    void getoption(std::istringstream& is);
-    void unittest(std::istringstream& is);
-#endif
-
-	// 読み筋を出力するevent handler
-	// 📝 Engine class(およびその派生class)から、読み筋を出力したいタイミングで
-	//     updateContext経由で呼び出される。
-	// 🌈 on_update_info_string()はやねうら王独自拡張。
-
-	static void on_update_no_moves(const Engine::InfoShort& info);
-    static void on_update_full(const Engine::InfoFull& info /*, bool showWDL*/);
-	static void on_iter(const Engine::InfoIter& info);
-	static void on_bestmove(std::string_view bestmove, std::string_view ponder);
-#if !STOCKFISH
-	static void on_update_string(std::string_view info);
-#endif
-
-    // すべての読み筋出力listenerを初期化する。
-	// 📝 set_engine()のタイミングでEngine側のset_on_XXXを呼び出して
-	//     上記のhandlerを登録してやる。
-	//     engine側は、読み筋の出力を抑制したい時やカスタマイズしたい時に
-	//     このlistenerを変更して対応する。
-    void init_search_update_listeners();
-
-#if !STOCKFISH
-	// 🌈 やねうら王独自拡張 🌈
-
-	// コマンドラインと"startup.txt"に書かれているUSIコマンドをstd_inputに積む。
-	void enqueue_startup_command();
-
-	// ファイルからUSIコマンドをstd_inputに積む。
-	void enqueue_command_from_file(std::istringstream& is);
-
-	// option名とvalueを指定して、そのoption名があるなら、そのoptionの値を変更する。
-	void set_option_if_exists(const std::string& option_name, const std::string& option_value);
-
-	// USIコマンドを1行実行する。
-	// "quit"が来たら、trueを返す。
-	bool usi_cmdexec(const std::string& cmd);
-
-	/*
-		📓 Stochastic Ponderの実装について
-
-		Stochastic Ponderはdlshogiで最初に実装された機能。
-		やねうら王では、以下のように実装している。このため、Stockfishと差異が生じる。
-
-		1. GUIから送られてきた"position"コマンドのコマンドラインを丸ごと保存しておく。
-		2. GUIから送られてきた"go ponder"コマンドのコマンドラインを丸ごと保存しておく。
-		3. GUIから"go ponder"が送られてきたときに、1.で保存した局面の1手前の局面をrootとして、そこから探索する。
-		4. GUIから"ponderhit"が送られてきたときに、2.で保存しておいたコマンド列から"ponder"の文字列を取り除き(無視して)実行する。
-	*/
-
-	// 上記1.
-	std::string last_position_cmd_string = "position startpos";
-
-	// 上記2.
-	std::string last_go_cmd_string;
-
-#endif
-};
-
-} // namespace YaneuraOu
 
 #endif // #ifndef USI_H_INCLUDED

@@ -18,22 +18,61 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\training_data_loader.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\bitboard.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\book\apery_book.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\book\book.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\book\makebook.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\book\makebook2015.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\book\makebook2019.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\engine\yaneuraou-engine\yaneuraou-search.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\eval\evaluate.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\eval\evaluate_bona_piece.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\eval\evaluate_mir_inv_tools.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\eval\material\evaluate_material.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\eval\nnue\evaluate_nnue.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\eval\nnue\evaluate_nnue_learner.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\eval\nnue\features\half_kp.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\eval\nnue\features\half_relative_kp.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\extra\sfen_packer.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\learn\learner.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\learn\learning_tools.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\learn\multi_think.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\mate\mate.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\mate\mate1ply_without_effect.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\mate\mate_solver.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\misc.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\movegen.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\movepick.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\position.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\testcmd\benchmark.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\testcmd\mate_test_cmd.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\testcmd\normal_test_cmd.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\testcmd\unit_test.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\thread.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\timeman.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\tt.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\types.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\usi.cpp" />
+    <ClCompile Include="..\..\YaneuraOu\source\usi_option.cpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
-    <VCProjectVersion>17.0</VCProjectVersion>
+    <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{df0dd4af-02f4-4ae5-ad1a-3f242649f4a0}</ProjectGuid>
+    <ProjectGuid>{a706967c-78d0-42a9-b3f7-ccbbc139b893}</ProjectGuid>
     <RootNamespace>nnuepytorch</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -74,15 +113,12 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;NNUEPYTORCH_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableUAC>false</EnableUAC>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -91,31 +127,32 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;NNUEPYTORCH_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableUAC>false</EnableUAC>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;NNUEPYTORCH_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>YANEURAOU_ENGINE_NNUE;EVAL_LEARN;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableUAC>false</EnableUAC>
     </Link>
+    <PostBuildEvent>
+      <Command>COPY /Y "$(TargetPath)" "../../libtraining_data_loader.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -123,30 +160,21 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;NNUEPYTORCH_EXPORTS;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>YANEURAOU_ENGINE_NNUE;EVAL_LEARN;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <EnableUAC>false</EnableUAC>
     </Link>
+    <PostBuildEvent>
+      <Command>COPY /Y "$(TargetPath)" "../../libtraining_data_loader.dll"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClInclude Include="framework.h" />
-    <ClInclude Include="pch.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="pch.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
-    </ClCompile>
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

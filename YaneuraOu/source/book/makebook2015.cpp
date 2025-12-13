@@ -1,6 +1,6 @@
 ﻿#include "../config.h"
 
-#if defined (ENABLE_MAKEBOOK_CMD)
+#if defined (ENABLE_MAKEBOOK_CMD) && (defined(EVAL_LEARN) || defined(YANEURAOU_ENGINE_DEEP))
 
 #include "book.h"
 #include "../position.h"
@@ -17,9 +17,9 @@
 #include <numeric>      // std::accumulate()
 
 using namespace std;
-namespace YaneuraOu {
-namespace Book {
 
+namespace Book
+{
 	// 局面を与えて、その局面で思考させるために、やねうら王探索部が必要。
 #if defined(EVAL_LEARN) && defined(YANEURAOU_ENGINE)
 
@@ -77,13 +77,11 @@ namespace Book {
 			for (size_t i = 0; i < m ; ++i)
 			{
 				const auto& rootMoves = th->rootMoves[i];
-				Move nextMove = (rootMoves.pv.size() >= 1) ? rootMoves.pv[1] : Move::none();
+				Move nextMove = (rootMoves.pv.size() >= 1) ? rootMoves.pv[1] : MOVE_NONE;
 
 				// 出現頻度は、バージョンナンバーを100倍したものにしておく)
-				// ⇨ ENGINE_VERSIONに数字以外の文字列入れたいことがあるので、これは良くない仕様。
-				//  800固定とする。(いま最新がV8.00系だから)
-				BookMove bp(rootMoves.pv[0].to_move16(), nextMove.to_move16(), rootMoves.score
-					, search_depth, /*int(atof(ENGINE_VERSION) * 100)*/ 800);
+				BookMove bp(rootMoves.pv[0], nextMove , rootMoves.score
+					, search_depth, int(atof(ENGINE_VERSION) * 100));
 
 				// MultiPVで思考しているので、手番側から見て評価値の良い順に並んでいることは保証される。
 				// (書き出しのときに並び替えなければ)
@@ -355,13 +353,13 @@ namespace Book {
 					{
 						// 駒落ちなどではsfen xxx movesとなるのでこれをfeedしなければならない。
 						auto sfen = feed_sfen(iss);
-						pos.set(sfen,&state);
+						pos.set(sfen,&state,Threads.main());
 						hirate = false;
 					}
 				} while (token == "startpos" || token == "moves" || token == "sfen");
 
 				if (hirate)
-					pos.set_hirate(&state);
+					pos.set_hirate(&state,Threads.main());
 
 				vector<Move> m;				// 初手から(moves+1)手までの指し手格納用
 
@@ -401,16 +399,16 @@ namespace Book {
 						break;
 					}
 
-					Move move = USIEngine::to_move(pos, token);
+					Move move = USI::to_move(pos, token);
 					// illigal moveであるとMOVE_NONEが返る。
-					if (move == Move::none())
+					if (move == MOVE_NONE)
 					{
 						cout << "illegal move : line = " << (k + 1) << " , " << sfen << " , move = " << token << endl;
 						break;
 					}
 
 					// MOVE_WIN,MOVE_RESIGNでは局面を進められないのでここで終了。
-					if (!move.is_ok())
+					if (!is_ok(move))
 						break;
 
 					append_to_sf();
@@ -432,7 +430,7 @@ namespace Book {
 					if (from_sfen)
 					{
 						// この場合、m[i + 1]が必要になるので、m.size()-1までしかループできない。
-						BookMove bp(m[i].to_move16(), m[i + 1].to_move16(), VALUE_ZERO, 32, 1);
+						BookMove bp(m[i] , m[i + 1] , VALUE_ZERO, 32, 1);
 						book.insert(sfen, bp);
 					}
 					else if (from_thinking)
@@ -665,6 +663,5 @@ namespace Book {
 	}
 
 } // namespace Book
-} // namespace YaneuraOu
 
-#endif // defined(YANEURAOU_ENGINE)
+#endif // defined(YANEURAOU_ENGINE) && (defined(EVAL_LEARN) || defined(YANEURAOU_ENGINE_DEEP))

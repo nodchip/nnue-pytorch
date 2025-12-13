@@ -1,22 +1,15 @@
-﻿#ifndef CONFIG_H_INCLUDED
-#define CONFIG_H_INCLUDED
+﻿#ifndef _CONFIG_H_INCLUDED
+#define _CONFIG_H_INCLUDED
 
-// ============================================================
 //
 //  やねうら王プロジェクト
-//  公式ブログ : http://yaneuraou.yaneu.com/
-//  GitHub     : https://github.com/yaneurao/YaneuraOu
-//  Wiki       : https://github.com/yaneurao/YaneuraOu/wiki
+//  公式サイト :  http://yaneuraou.yaneu.com/yaneuraou_mini/
 //
-// ============================================================
 
 // 思考エンジンのバージョンとしてUSIプロトコルの"usi"コマンドに応答するときの文字列。
 // ただし、この値を数値として使用することがあるので数値化できる文字列にしておく必要がある。
-#if !defined(ENGINE_VERSION)
+#define ENGINE_VERSION "7.62"
 
-#define ENGINE_VERSION "9.10git"
-
-#endif
 // --------------------
 //  思考エンジンの種類
 // --------------------
@@ -77,9 +70,6 @@
 //  探索に関する設定
 // ---------------------
 
-// やねうら王の基本探索部(Stockfishを参考に書いたもの)を用いる。
-// #define YANEURAOU_ENGINE
-
 
 // Position::see()を用いるか。これはSEE(Static Exchange Evaluation : 静的取り合い評価)の値を返す関数。
 // #define USE_SEE
@@ -94,9 +84,24 @@
 // #define USE_MOVE_PICKER
 
 
-// Position classにcorrection historyで用いるような
-// materialKey,pawnKey,minorPieceKey,nonPawnKeyが追加される。
-// #define USE_PARTIAL_KEY
+// 入玉時の宣言勝ち機能を用いるか
+// これをdefineすると、"EnteringKingRule"というオプションが自動追加される。
+// ※　Search::Limits.enteringKingRule に↑のオプションの値が反映される。
+//     Position::DeclarationWin()は、宣言勝ち判定を行うときに、それを見る。
+// #define USE_ENTERING_KING_WIN
+
+
+// PV(読み筋)を表示するときに置換表の指し手をかき集めてきて表示するか。
+// 自前でPVを管理してRootMoves::pvを更新するなら、この機能を使う必要はない。
+// これはPVの更新が不要なので実装が簡単だが、Ponderの指し手を返すためには
+// PVが常に正常に更新されていないといけないので最近はこの方法は好まれない。
+// ただしShogiGUIの解析モードでは思考エンジンが出力した最後の読み筋を記録するようなので、
+// 思考を途中で打ち切るときに、fail low/fail highが起きていると、中途半端なPVが出力され、それが棋譜に残る。
+// かと言って、そのときにPVの出力をしないと、最後に出力されたPVとbest moveとは異なる可能性があるので、
+// それはよろしくない。検討モード用の思考オプションを用意すべき。
+// #define USE_TT_PV
+// →　ConsiderationMode というエンジンオプションを用意したので、この機能は無効化する。
+
 
 
 // ---------------------
@@ -131,7 +136,7 @@
 // #define EVAL_PPET      // ×  技巧型 2駒+利き+手番(実装予定なし)
 // #define EVAL_KKPPT     // ○  KKPP型 4駒関係 手番あり。(55将棋、56将棋でも使えそう)※3
 // #define EVAL_KKPP_KKPT // ○  KKPP型 4駒関係 手番はKK,KKPTにのみあり。※3
-// #define EVAL_SFNN      //     2025年夏にStockfishから逆輸入されたStockfish NNUE評価関数
+// #define EVAL_DL        //     Deep Learning系の評価関数。dlshogiを参考に。※5
 
 // ※1 : KPP_PPTは、差分計算が面倒で割に合わないことが判明したのでこれを使うぐらいならKPP_KKPTで十分だという結論。
 // ※2 : 実装したけどいまひとつだったので差分計算実装せず。そのため遅すぎて、実質使い物にならない。ソースコードの参考用。
@@ -141,10 +146,7 @@
 //       #define MATERIAL_LEVEL 1 なら、駒得のみの評価関数
 //       #define MATERIAL_LEVEL 2 なら…
 //       → eval/material/evaluate_material.cppに定義があるのでそちらを見ること。
-
-// CLASSIC_EVAL(Material,KPPT,KPP_KKPT,CLASSIC NNUE)を使う時には、これをdefineすること。
-// EVAL_SFNNを使うときはdefineしてはならない。
-// #define USE_CLASSIC_EVAL
+// ※5 : // あとで
 
 // 駒の価値のテーブルを使うか。(Apery WCSC26の定義)
 // Eval::PieceValueなどが使えるようになる。
@@ -158,6 +160,10 @@
 //   最大で2個。
 // 3. 駒番号が何の駒であるかが決まっている。(PieceNumber型)
 //#define USE_EVAL_LIST
+
+
+// 評価関数を計算したときに、それをHashTableに記憶しておく機能。KPPT評価関数においてのみサポート。
+// #define USE_EVAL_HASH
 
 
 // 評価関数パラメーターを共有メモリを用いて他プロセスのものと共有する。
@@ -174,6 +180,7 @@
 // エンジンオプションをコンパイル時に指定したい時に用いる。
 // ";"で区切って複数指定できる。
 // #define ENGINE_OPTIONS "FV_SCALE=24;BookFile=no_book"
+
 
 // ---------------------
 //  置換表絡みの設定
@@ -253,8 +260,15 @@
 //  高速化に関する設定
 // ---------------------
 
-// トーナメント(大会)用のビルド。最新CPU(いまはAVX2)用でEVAL_HASH大きめ。EVAL_LEARN、TEST_CMD使用不可。ASSERTなし。
+
+// トーナメント(大会)用のビルド。最新CPU(いまはAVX2)用でEVAL_HASH大きめ。EVAL_LEARN、TEST_CMD使用不可。ASSERTなし。GlobalOptionsなし。
 // #define FOR_TOURNAMENT
+
+// sortが少し高速化されるらしい。
+// 安定ソートではないので並び順が以前のとは異なるから、benchコマンドの探索ノード数は変わる。
+// CPU targetによって実装が変わるのでCPUによってbenchコマンドの探索ノード数は変わる。
+// #define USE_SUPER_SORT
+
 
 // ---------------------
 // ふかうら王(dlshogi互換エンジン)に関する設定。
@@ -268,9 +282,6 @@
 // ふかうら王でTensorRTを使う時はこちら。
 //#define TENSOR_RT
 
-// ふかうら王でCore MLを使う時はこちら。
-// ※　Mac専用。
-//#define COREML
 
 // ---------------------
 // 探索パラメーターの自動調整用
@@ -278,11 +289,19 @@
 
 
 // 探索パラメーターのチューニングを行うモード
-// ※　使い方は、やねうら王Wiki の 「探索パラメーターのチューニングについて」をご覧ください。
+// ※　使い方は、"docs/解説.txt" の 「探索パラメーターのチューニングについて」をご覧ください。
 //
 // 実行時に"param/yaneuraou-param.h" からパラメーターファイルを読み込むので
 // "source/engine/yaneuraou-engine/yaneuraou-param.h"をそこに配置すること。
 //#define TUNING_SEARCH_PARAMETERS
+
+
+// ---------------------
+//  YO-Cluster : YaneuraOu The Cluster
+// ---------------------
+
+// YO-Clusterを使う時は、これをdefineする。
+//#define USE_YO_CLUSTER
 
 // ---------------------
 // デバッグに関する設定
@@ -320,18 +339,29 @@
 // 長い利き(遠方駒の利き)のライブラリを用いるか。
 // 超高速1手詰め判定などではこのライブラリが必要。
 // do_move()のときに利きの差分更新を行なうので、do_move()は少し遅くなる。(その代わり、利きが使えるようになる)
-// #define LONG_EFFECT_LIBRARY
+//#define LONG_EFFECT_LIBRARY
 
 
 // position.hのStateInfoに直前の指し手、移動させた駒などの情報を保存しておくのか
 // これが保存されていると詰将棋ルーチンなどを自作する場合においてそこまでの手順を表示するのが簡単になる。
 // (Position::moves_from_start_pretty()などにより、わかりやすい手順が得られる。
 // ただし通常探索においてはやや遅くなるので思考エンジンとしてリリースするときには無効にしておくこと。
-// #define KEEP_LAST_MOVE
+
+//#define KEEP_LAST_MOVE
+
+
+// GlobalOptionという、EVAL_HASHを有効/無効を切り替えたり、置換表の有効/無効を切り替えたりする
+// オプションのための変数が使えるようになる。スピードが1%ぐらい遅くなるので大会用のビルドではオフを推奨。
+// #define USE_GLOBAL_OPTIONS
 
 
 // USIプロトコルでgameoverコマンドが送られてきたときに gameover_handler()を呼び出す。
 // #define USE_GAMEOVER_HANDLER
+
+
+// "Threads"オプション が 8以下の設定の時でも強制的に bindThisThread()を呼び出して、指定されたNUMAで動作するようにする。
+// "ThreadIdOffset"オプションと併用して、狙ったNUMAで動作することを強制することができる。
+//#define FORCE_BIND_THIS_THREAD
 
 
 // PVの出力時の千日手に関する出力をすべて"rep_draw"に変更するオプション。
@@ -339,32 +369,9 @@
 // #define PV_OUTPUT_DRAW_ONLY
 
 
-// 千日手検出を簡略化する
-// 💡同一局面の4回目の出現ではなく、2回目の出現で千日手として扱う。
-//    これを無効化するとR5～10程度弱くなるが、これをオンにすると優等局面で評価値31111が出力されたりするので、
-//    検討目的なら、これをオンにするのは好ましくないかも知れない。
-// #define ENABLE_QUICK_DRAW
-
-// 差分計算型の評価関数を用いるのか？
-// ※ 次の子nodeに行くときに必ずevaluate()を呼び出さないといけないタイプの評価関数。
-// #define USE_DIFF_EVAL
-
-// PolicyBookを使うのか？
-// TODO : ⇨ PolicyBookについて、記事を書く。
-// #define USE_POLICY_BOOK
-
-// PolicyBookの局後学習を有効化するのか？
-// TODO : ⇨ PolicyBookの局後学習について、記事を書く。
-// #define ENABLE_POLICY_BOOK_LEARN
-
-// NNUE評価関数の実行ファイルへの埋め込み(incbinを用いる)
-// ⚠ ビルドするときにsourceフォルダ直下に"nn.bin"を配置すること。
-// #define NNUE_EMBEDDING
-
-// このシンボルはStockfishの元のコードを示すのに用いる。
-// 定義してもビルドエラーになる。
-// #define STOCKFISH
-
+// ニコニコ生放送の電王盤用
+// 電王盤はMultiPV非対応なので定跡を送るとき、"multipv"をつけずに1番目の候補手を送信する必要がある。
+// #define NICONICO
 
 // ===============================================================
 // ここ以降では、↑↑↑で設定した内容に基づき必要なdefineを行う。
@@ -374,31 +381,22 @@
 constexpr int MAX_PLY_NUM = 246;
 
 // デバッグ時の標準出力への局面表示などに日本語文字列を用いる。
+
 #define PRETTY_JP
 
 // --------------------
 // release configurations
 // --------------------
 
-
-
 // --- 通常の思考エンジンとして実行ファイルを公開するとき用の設定集
 
-#if defined(YANEURAOU_ENGINE_SFNN)
+#if defined(YANEURAOU_ENGINE_KPPT) || defined(YANEURAOU_ENGINE_KPP_KKPT) || defined(YANEURAOU_ENGINE_NNUE) || defined(YANEURAOU_ENGINE_MATERIAL)
 
+	#define ENGINE_NAME "YaneuraOu"
+
+	// 通常のやねうら王探索部(Stockfishっぽいやつ)を用いる。
 	#define YANEURAOU_ENGINE
-	#define EVAL_SFNN
 
-	#define USE_MATE_1PLY
-	#define USE_TIME_MANAGEMENT
-	#define USE_MOVE_PICKER
-	#define USE_EVAL
-
-#elif defined(YANEURAOU_ENGINE_KPPT) || defined(YANEURAOU_ENGINE_KPP_KKPT) || defined(YANEURAOU_ENGINE_NNUE) || defined(YANEURAOU_ENGINE_MATERIAL)
-
-	#define YANEURAOU_ENGINE
-	#define USE_CLASSIC_EVAL
-	#define USE_PARTIAL_KEY
 	#define USE_PIECE_VALUE
 	#define USE_SEE
 	#define USE_EVAL_LIST
@@ -408,24 +406,14 @@ constexpr int MAX_PLY_NUM = 246;
 	#define USE_TIME_MANAGEMENT
 	#define USE_MOVE_PICKER
 	#define USE_EVAL
+	#define USE_ENTERING_KING_WIN
 
 	#if defined(YANEURAOU_ENGINE_KPPT) || defined(YANEURAOU_ENGINE_KPP_KKPT)
+		// EvalHashを用いるのは3駒型のみ。それ以外は差分計算用の状態が大きすぎてhitしたところでどうしようもない。
+		#define USE_EVAL_HASH
 
 		// 評価関数を共用して複数プロセス立ち上げたときのメモリを節約。(いまのところWindows限定)
 		#define USE_SHARED_MEMORY_IN_EVAL
-	#endif
-
-	#if defined(YANEURAOU_ENGINE_KPPT) || defined(YANEURAOU_ENGINE_KPP_KKPT) || defined(YANEURAOU_ENGINE_NNUE)
-		#define USE_DIFF_EVAL
-	#endif
-
-	#if defined(YANEURAOU_ENGINE_NNUE) && !defined(NNUE_EMBEDDING)
-		// 📝 Stockfishでは、NNUE_EMBEDDING_OFFを定義した時にのみ、
-		//    評価関数パラメーターをファイルから読みこむ機能が有効になる。
-		//    (定義しないとincbinを用いて埋め込まれているものを読み込む)
-		//     やねうら王もこれに倣ったので、埋め込まないならばNNUE_EMBEDDING_OFFを
-		//    定義する必要がある。
-		#define NNUE_EMBEDDING_OFF
 	#endif
 
 	// 学習機能を有効にするオプション。
@@ -444,7 +432,12 @@ constexpr int MAX_PLY_NUM = 246;
 	// 定跡生成絡み
 	#define ENABLE_MAKEBOOK_CMD
 
+	// パラメーターの自動調整絡み
+	#define USE_GAMEOVER_HANDLER
 	//#define LONG_EFFECT_LIBRARY
+
+	// GlobalOptionsは有効にしておく。
+	#define USE_GLOBAL_OPTIONS
 
 	// -- 各評価関数ごとのconfiguration
 
@@ -453,10 +446,6 @@ constexpr int MAX_PLY_NUM = 246;
 		#define EVAL_MATERIAL
 		// 駒割のみの評価関数ではサポートされていない機能をundefする。
 		#undef EVAL_LEARN
-
-		#if !defined(MATERIAL_LEVEL)
-			#define MATERIAL_LEVEL 001
-		#endif
 
 		// 実験用評価関数
 		// 駒得評価関数の拡張扱いをする。
@@ -487,8 +476,8 @@ constexpr int MAX_PLY_NUM = 246;
 		// EVAL_NNUE_KP256      : KP256(評価関数1MB未満)
 		// EVAL_NNUE_HALFKPE9   : 標準NNUE型のおよそ9倍(540MB程度)
 
-		//#undef EVAL_NNUE_KP256
-		//#define EVAL_NNUE_HALFKPE9
+		 //#undef EVAL_NNUE_KP256
+		 //#define EVAL_NNUE_HALFKPE9
 
 		// #define EVAL_NNUE_HALFKP256
 		// #define EVAL_NNUE_KP256
@@ -501,9 +490,11 @@ constexpr int MAX_PLY_NUM = 246;
 
 #if defined(YANEURAOU_ENGINE_DEEP)
 
-	#define EVAL_DEEP "DL"
+	#define ENGINE_NAME "FukauraOu"
+	#define EVAL_DEEP "dlshogi-denryu2021"
 	#define USE_EVAL
 	#define USE_TIME_MANAGEMENT
+	#define USE_ENTERING_KING_WIN
 	#define USE_MATE_1PLY
 	#define USE_MATE_SOLVER
 	#define USE_MATE_DFPN
@@ -524,9 +515,7 @@ constexpr int MAX_PLY_NUM = 246;
 // --- tanuki-詰将棋エンジンとして実行ファイルを公開するとき用の設定集
 
 #if defined(TANUKI_MATE_ENGINE)
-	// 🤔 CLASSIC EVALは用いないが、KEEP_LAST_MOVEのようなStateInfo上の
-	//     追加メンバー変数を用いるには、USE_CLASSIC_EVALを定義する必要がある。
-	#define USE_CLASSIC_EVAL
+	#define ENGINE_NAME "tanuki- mate solver"
 	#define KEEP_LAST_MOVE
 	#undef  MAX_PLY_NUM
 	#define MAX_PLY_NUM 2000
@@ -538,10 +527,8 @@ constexpr int MAX_PLY_NUM = 246;
 // --- やねうら王詰将棋エンジンとして実行ファイルを公開するとき用の設定集
 
 #if defined(YANEURAOU_MATE_ENGINE)
-	// 🤔 CLASSIC EVALは用いないが、Position::materialのような
-	//     追加メンバー変数を用いるには、USE_CLASSIC_EVALを定義する必要がある。
-	#define USE_CLASSIC_EVAL
-	#undef MAX_PLY_NUM
+	#define ENGINE_NAME "YaneuraOu mate solver"
+	#undef  MAX_PLY_NUM
 	#define MAX_PLY_NUM 2000
 	#define USE_MATE_1PLY
 	//#define LONG_EFFECT_LIBRARY
@@ -555,10 +542,11 @@ constexpr int MAX_PLY_NUM = 246;
 // --- ユーザーの自作エンジンとして実行ファイルを公開するとき用の設定集
 
 #if defined(USER_ENGINE)
-	//#define USE_SEE
-	//#define USE_EVAL
-	//#define EVAL_MATERIAL
-	//#define USE_PIECE_VALUE
+	#define ENGINE_NAME "YaneuraOu user engine"
+	#define USE_SEE
+	#define USE_EVAL
+	#define EVAL_MATERIAL
+	#define USE_PIECE_VALUE
 #endif
 
 // --------------------
@@ -572,9 +560,6 @@ constexpr int MAX_PLY_NUM = 246;
 	#undef ENABLE_TEST_CMD
 	#undef USE_GLOBAL_OPTIONS
 	#undef KEEP_LAST_MOVE
-
-	// 千日手検出を簡略化する
-	#define ENABLE_QUICK_DRAW
 #endif
 
 // --------------------
@@ -585,6 +570,32 @@ constexpr int MAX_PLY_NUM = 246;
 // 正しく計算できない。そのため、EVAL_HASHを動的に無効化するためのオプションを用意する。
 #if defined(EVAL_LEARN)
 	#define USE_GLOBAL_OPTIONS
+#endif
+
+// --------------------
+//   GlobalOptions
+// --------------------
+
+#if defined(USE_GLOBAL_OPTIONS)
+
+struct GlobalOptions_
+{
+	// eval hashを有効/無効化する。
+	// (USE_EVAL_HASHがdefineされていないと有効にはならない。)
+	bool use_eval_hash;
+
+	// 置換表のprobe()を有効化/無効化する。E
+	// (無効化するとTT.probe()が必ずmiss hitするようになる)
+	bool use_hash_probe;
+
+	GlobalOptions_()
+	{
+		use_eval_hash = use_hash_probe = true;
+	}
+};
+
+extern GlobalOptions_ GlobalOptions;
+
 #endif
 
 // --------------------
@@ -619,15 +630,11 @@ constexpr int MAX_PLY_NUM = 246;
 #define ASSERT_LV4(X) ASSERT_LV_EX(4, X)
 #define ASSERT_LV5(X) ASSERT_LV_EX(5, X)
 
-// memoryがalignされているかのassert
-#define ASSERT_ALIGNED(ptr, alignment) assert(reinterpret_cast<uintptr_t>(ptr) % alignment == 0)
-
 // --- declaration of unreachablity
 
 // switchにおいてdefaultに到達しないことを明示して高速化させる
-// 💡 デバッグ時は普通にしとかないと変なアドレスにジャンプして原因究明に時間がかかる。
-// 📝 StockfishでUtility::sf_assume(bool)が追加された。そちらも参考にすること。
 
+// デバッグ時は普通にしとかないと変なアドレスにジャンプして原因究明に時間がかかる。
 #if defined(_MSC_VER)
 #define UNREACHABLE ASSERT_LV3(false); __assume(0);
 #elif defined(__GNUC__)
@@ -657,12 +664,6 @@ constexpr bool pretty_jp = true;
 constexpr bool pretty_jp = false;
 #endif
 
-// --- PolicyBook
-
-// PolicyBookを使うときは、hash keyを128bitにする。局面のhash keyが衝突してしまうとまずいので…。
-#if defined(USE_POLICY_BOOK)
-#define HASH_KEY_BITS 128
-#endif
 
 // --- hash key bits and TT_CLUSTER_SIZE
 
@@ -670,14 +671,12 @@ constexpr bool pretty_jp = false;
 #define HASH_KEY_BITS 64
 #endif
 
-// ここ、typedef ではなく usingで書きたいが、現時点でKey64,Key128,Key256が未定義なので…。
-
 #if HASH_KEY_BITS <= 64
-#define Key Key64
+#define HASH_KEY Key64
 #elif HASH_KEY_BITS <= 128
-#define Key Key128
+#define HASH_KEY Key128
 #else
-#define Key Key256
+#define HASH_KEY Key256
 #endif
 
 #if !defined(TT_CLUSTER_SIZE)
@@ -768,6 +767,24 @@ constexpr bool pretty_jp = false;
 #define USE_SSE2
 #endif
 
+
+// --------------------
+//    for 32bit OS
+// --------------------
+
+#if !defined(IS_64BIT)
+
+// 32bit環境ではメモリが足りなくなるので以下の2つは強制的にオフにしておく。
+
+#undef USE_EVAL_HASH
+//#undef USE_SHARED_MEMORY_IN_EVAL
+
+// 機械学習用の配列もメモリ空間に収まりきらないのでコンパイルエラーとなるから
+// これもオフにしておく。
+#undef EVAL_LEARN
+
+#endif
+
 // ----------------------------
 //     evaluate function
 // ----------------------------
@@ -776,7 +793,7 @@ constexpr bool pretty_jp = false;
 #if defined(EVAL_MATERIAL)
 	#if defined(MATERIAL_LEVEL)
 		// MATERIAL_LEVELの番号を"Level"として出力してやる。
-		#define EVAL_TYPE_NAME "MaterialLv" + std::to_string(MATERIAL_LEVEL)
+		#define EVAL_TYPE_NAME "MaterialLv" << MATERIAL_LEVEL
 	#else
 		// 適切な評価関数がないので単にEVAL_MATERIALを指定しているだけだから、EVAL_TYPE_NAMEとしては空欄でいいかと。
 		#define EVAL_TYPE_NAME ""
@@ -797,21 +814,17 @@ constexpr bool pretty_jp = false;
 #elif defined(EVAL_DEEP)
 	#if defined(ONNXRUNTIME)
 		#if defined(ORT_CPU)
-			#define EVAL_TYPE_NAME "ORT_CPU-" EVAL_DEEP
+			#define EVAL_TYPE_NAME "ORT_CPU-" << EVAL_DEEP
 		#elif defined(ORT_DML)
-			#define EVAL_TYPE_NAME "ORT_DML-" EVAL_DEEP
+			#define EVAL_TYPE_NAME "ORT_DML-" << EVAL_DEEP
 		#elif defined(ORT_TRT)
-			#define EVAL_TYPE_NAME "ORT_TRT-" EVAL_DEEP
+			#define EVAL_TYPE_NAME "ORT_TRT-" << EVAL_DEEP
 		#else
-			#define EVAL_TYPE_NAME "ORT-" EVAL_DEEP
+			#define EVAL_TYPE_NAME "ORT-" << EVAL_DEEP
 		#endif
 	#elif defined(TENSOR_RT)
 		#include "NvInferRuntimeCommon.h"
-		// TensorRT、長いのでTRTにしておく。TRTのバージョン、長いのでくっつけるのやめておく。
-		// #define EVAL_TYPE_NAME "TRT" + std::to_string(getInferLibVersion()) + "-" EVAL_DEEP
-		#define EVAL_TYPE_NAME "TRT-" EVAL_DEEP
-	#elif defined(COREML)
-		#define EVAL_TYPE_NAME "CoreML-" EVAL_DEEP
+		#define EVAL_TYPE_NAME "TensorRT" << std::to_string(getInferLibVersion()) << "-" << EVAL_DEEP
 	#endif
 
 #else
@@ -832,4 +845,5 @@ constexpr bool pretty_jp = false;
 #define ADD_BOARD_EFFECT_REWIND(color_,sq_,e1_) { board_effect[color_].e[sq_] += (uint8_t)e1_; }
 #define ADD_BOARD_EFFECT_BOTH_REWIND(color_,sq_,e1_,e2_) { board_effect[color_].e[sq_] += (uint8_t)e1_; board_effect[~color_].e[sq_] += (uint8_t)e2_; }
 
-#endif // if !defined(CONFIG_H_INCLUDED)
+#endif // ifndef _CONFIG_H_INCLUDED
+

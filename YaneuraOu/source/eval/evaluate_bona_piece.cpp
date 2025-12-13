@@ -2,23 +2,13 @@
 #include "../position.h"
 
 using namespace std;
-namespace YaneuraOu {
-namespace Eval {
 
+namespace Eval
+{
 #if defined (USE_PIECE_VALUE)
 
-	// 駒の価値
+    // 駒の価値
     int PieceValue[PIECE_NB] =
-    {
-        0, PawnValue, LanceValue, KnightValue, SilverValue, BishopValue, RookValue,GoldValue,
-        KingValue, ProPawnValue, ProLanceValue, ProKnightValue, ProSilverValue, HorseValue, DragonValue,0,
-
-        0, PawnValue, LanceValue, KnightValue, SilverValue, BishopValue, RookValue,GoldValue,
-        KingValue, ProPawnValue, ProLanceValue, ProKnightValue, ProSilverValue, HorseValue, DragonValue,0,
-    };
-
-	// 駒の価値、駒割計算用(後手の駒が負の値)
-    int PieceValueM[PIECE_NB] =
     {
         0, PawnValue, LanceValue, KnightValue, SilverValue, BishopValue, RookValue,GoldValue,
         KingValue, ProPawnValue, ProLanceValue, ProKnightValue, ProSilverValue, HorseValue, DragonValue,0,
@@ -50,21 +40,11 @@ namespace Eval {
         VALUE_ZERO, ProPawnValue - PawnValue, ProLanceValue - LanceValue, ProKnightValue - KnightValue, ProSilverValue - SilverValue, HorseValue - BishopValue, DragonValue - RookValue, VALUE_ZERO ,
         VALUE_ZERO, ProPawnValue - PawnValue, ProLanceValue - LanceValue, ProKnightValue - KnightValue, ProSilverValue - SilverValue, HorseValue - BishopValue, DragonValue - RookValue, VALUE_ZERO ,
     };
+#endif
 
-	// 指し手moveによってtoの地点の駒が捕獲できることがわかっている時の、駒を捕獲する価値
-	// moveが成りの指し手である場合、その価値も上乗せして計算する。
-	Value CapturePieceValuePlusPromote(const Position& pos, Move move)
-	{
-		return (Value)CapturePieceValue[pos.piece_on(move.to_sq())]
-			// 駒が成る時は、駒の移動元であるfrom_sq(move)はまだ成っていない駒であることが保証される。
-			+ (move.is_promote() ? (Value)ProDiffPieceValue[pos.piece_on(move.from_sq())] : VALUE_ZERO);
-	}
-
-#endif // defined (USE_PIECE_VALUE)
 
 #if defined(USE_EVAL_LIST)
-
-	ExtBonaPiece kpp_board_index[PIECE_NB] = {
+    ExtBonaPiece kpp_board_index[PIECE_NB] = {
         { BONA_PIECE_ZERO, BONA_PIECE_ZERO },
         { f_pawn, e_pawn },
         { f_lance, e_lance },
@@ -186,7 +166,7 @@ namespace Eval {
 
         return os;
     }
+
 #endif // defined(USE_EVAL_LIST)
 
 } // namespace Eval
-} // namespace YaneuraOu {

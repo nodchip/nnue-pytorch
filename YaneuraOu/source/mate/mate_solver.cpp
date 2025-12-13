@@ -9,7 +9,6 @@
 
 // dlshogiのN手詰めルーチン
 
-namespace YaneuraOu {
 namespace Mate {
 
 	// 3手詰めチェック
@@ -22,8 +21,10 @@ namespace Mate {
 		StateInfo si;
 		StateInfo si2;
 
-		for (const auto& m : MovePicker<true, INCHECK , GEN_ALL , false /* no ordering */>(pos))
+		for (const auto& ml : MovePicker<true, INCHECK , GEN_ALL , false /* no ordering */>(pos))
 		{
+			auto m = ml.move;
+
 			pos.do_move(m, si, true);
 
 			// and node
@@ -55,8 +56,10 @@ namespace Mate {
 					found_mate = true;
 				}
 				else {
-					for (const auto& m2 : move_picker2)
+					for (const auto& ml2 : move_picker2)
 					{
+						auto m2 = ml2.move;
+
 						// この指し手で逆王手になるなら、不詰めとして扱う
 						// (我々は王手がかかっている局面で呼び出せる1手詰めルーチンを持っていないので)
 						if (pos.gives_check(m2))
@@ -87,7 +90,7 @@ namespace Mate {
 			if (found_mate)
 				return m;
 		}
-		return Move::none();
+		return MOVE_NONE;
 	}
 
 	// mate_odd_ply()の王手がかかっているかをtemplateにしたやつ。
@@ -100,14 +103,14 @@ namespace Mate {
 		// 手数制限オーバーか？
 		if (max_game_ply && max_game_ply < pos.game_ply())
 			// 次の1手が指せない以上、これは不詰
-			return Move::none();
+			return MOVE_NONE;
 
 		if (ply == 3)
 			return mate_3ply<INCHECK,GEN_ALL>(pos);
 		else if (ply == 1)
 			// 王手がかかっていないなら1手詰めを呼び出せるが、王手がかかっているなら1手詰めを呼べないので
 			// evasionのなかから詰む指し手を探す必要がある。レアケースなので、ここでは不詰み扱いをしておく。
-			return !pos.in_check() ? mate_1ply(pos) : Move::none();
+			return !pos.in_check() ? mate_1ply(pos) : MOVE_NONE;
 
 		// OR接点なので一つでも詰みを見つけたらそれで良し。
 
@@ -116,7 +119,7 @@ namespace Mate {
 
 			// MovePickerの指し手で1手進める。
 			// これが合法手であることは、MovePickerのほうで保証されている。
-			auto m = Move(ml);
+			auto m = ml.move;
 
 			StateInfo state;
 			// これが王手であることはわかっているので第3引数はtrueで固定しておく。
@@ -143,7 +146,7 @@ namespace Mate {
 			case MateRepetitionState::Unknown:
 				// いずれでもないので、きちんと調べる必要がある。
 				// さらにこの局面から偶数手で相手が詰まされるかのチェック
-				found_mate = mated_even_ply<GEN_ALL>(pos, ply - 1) == Move::none() /* 回避手がない == 詰み */;
+				found_mate = mated_even_ply<GEN_ALL>(pos, ply - 1) == MOVE_NONE /* 回避手がない == 詰み */;
 				break;
 
 			default: UNREACHABLE;
@@ -157,7 +160,7 @@ namespace Mate {
 		}
 
 		// 詰みを発見できなかった。
-		return Move::none();
+		return MOVE_NONE;
 	}
 		
 	// 偶数手詰め
@@ -175,7 +178,7 @@ namespace Mate {
 		// 手数制限があり、かつ、手数が設定された手数を超えていて、かつ指し手がある(詰みではない)なら、引き分け = 不詰。
 		if (max_game_ply && max_game_ply < pos.game_ply() && picker.size())
 			// 次の1手が指せないが、この局面で詰んでいなければセフセフ
-			return Move::win(); // とりま、MOVE_NONE以外を返せばそれで逃れているということで。
+			return MOVE_WIN; // とりま、MOVE_NONE以外を返せばそれで逃れているということで。
 
 		// AND節点なのでこの局面のすべての指し手に対して(手番側が)詰まなければならない。
 		// 一つでも詰まない手があるならfalseを返す。
@@ -184,7 +187,7 @@ namespace Mate {
 		for (const auto& ml : picker)
 		{
 			//std::cout << depth << " : " << pos.toSFEN() << " : " << ml.move.toUSI() << std::endl;
-			auto m = Move(ml);
+			auto m = ml.move;
 
 			// この指し手で王手になるのか
 			const bool givesCheck = pos.gives_check(m);
@@ -236,7 +239,7 @@ namespace Mate {
 		}
 
 		// 詰みを逃れる指し手を見つけられなかった = 詰み
-		return Move::none();
+		return MOVE_NONE;
 	}
 
 	// 偶数手詰め
@@ -267,6 +270,5 @@ namespace Mate {
 
 
 } // namespace Mate
-} // namespace YaneuraOu
 
 #endif // defined(USE_MATE_SOLVER)

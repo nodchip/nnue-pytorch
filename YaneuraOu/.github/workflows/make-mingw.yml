@@ -1,0 +1,104 @@
+# subline windows build
+name: Make CI (MinGW for Windows)
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  build-mingw:
+    # ubuntu-latest = ubuntu-20.04
+    # https://docs.github.com/ja/actions/using-github-hosted-runners/about-github-hosted-runners
+    # https://github.com/actions/virtual-environments/blob/main/images/linux/Ubuntu2004-Readme.md
+    runs-on: ubuntu-20.04
+
+    strategy:
+      matrix:
+        edition:
+          - YANEURAOU_ENGINE_NNUE
+          - YANEURAOU_ENGINE_NNUE_HALFKP_VM_256X2_32_32
+          - YANEURAOU_ENGINE_NNUE_HALFKPE9
+          - YANEURAOU_ENGINE_NNUE_KP256
+          - YANEURAOU_ENGINE_KPPT
+          - YANEURAOU_ENGINE_KPP_KKPT
+          #- YANEURAOU_ENGINE_MATERIAL*
+          - "YANEURAOU_ENGINE_MATERIAL,YANEURAOU_ENGINE_MATERIAL9"
+          - YANEURAOU_MATE_ENGINE
+          - TANUKI_MATE_ENGINE
+          - USER_ENGINE
+        compiler:
+          - x86_64-w64-mingw32-g++-posix
+          - i686-w64-mingw32-g++-posix
+        target:
+          - "normal,tournament"
+          - evallearn
+        archcpu:
+          - "AVX512VNNI,AVX512"
+          - "AVX2,SSE42,SSE2"
+          - "SSE41,SSSE3,OTHER"
+          - "ZEN1,ZEN2"
+          - "ZEN3,AVXVNNI"
+          - "NO_SSE"
+        exclude:
+          # NNUEの教師生成/機械学習ビルドにはBLASが必要だが、現状はUbuntuのMinGWでOpenBLASを扱えない
+          # NNUE's machine learning build requires BLAS, but currently Ubuntu's MinGW cannot handle OpenBLAS
+          - edition: YANEURAOU_ENGINE_NNUE
+            target: evallearn
+          - edition: YANEURAOU_ENGINE_NNUE_HALFKP_VM_256X2_32_32
+            target: evallearn
+          - edition: YANEURAOU_ENGINE_NNUE_HALFKPE9
+            target: evallearn
+          - edition: YANEURAOU_ENGINE_NNUE_KP256
+            target: evallearn
+          # 以下のエディションには機械学習の実装が存在しない
+          # There is no machine learning implementation for the following editions
+          - edition: YANEURAOU_MATE_ENGINE
+            target: evallearn
+          - edition: TANUKI_MATE_ENGINE
+            target: evallearn
+          - edition: USER_ENGINE
+            target: evallearn
+          # 32bit compiler x 64bit archcpu
+          - compiler: i686-w64-mingw32-g++-posix
+            archcpu: "AVX512VNNI,AVX512"
+          - compiler: i686-w64-mingw32-g++-posix
+            archcpu: "AVX2,SSE42,SSE2"
+          - compiler: i686-w64-mingw32-g++-posix
+            archcpu: "SSE41,SSSE3,OTHER"
+          - compiler: i686-w64-mingw32-g++-posix
+            archcpu: "ZEN1,ZEN2"
+          # 64bit compiler x 32bit archcpu
+          - compiler: x86_64-w64-mingw32-g++-posix
+            archcpu: NO_SSE
+          # Ubuntu-20.04 MinGW は archcpu ZEN3,AVXVNNI のサポートを行わない
+          # ubuntu-20.04 MinGW will not support the archcpu ZEN3,AVXVNNI
+          # `-march=cascadelake`: LLVM8, GCC9 support (AVX512VNNI)
+          # `-march=znver2`: LLVM9, GCC9 support
+          # `-march=alderlake` : LLVM12, GCC11 support (AVX-VNNI)
+          # `-march=znver3`: LLVM12 support
+          - archcpu: "ZEN3,AVXVNNI"
+
+    steps:
+      - name: Checkout own repository
+        uses: actions/checkout@v2
+        with:
+          path: main
+
+      - name: install mingw
+        run: |
+          sudo cat /etc/apt/sources.list
+          sudo ls -R /etc/apt/sources.list.d
+          sudo apt update
+          sudo apt install build-essential mingw-w64
+
+      - name: make
+        run: ./main/script/mingw_gcc.sh -e ${{ matrix.edition }} -c ${{ matrix.compiler }} -t ${{ matrix.target }} -a ${{ matrix.archcpu }}
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: build-mingw_${{ github.run_number }}_${{ github.sha }}
+          path: ./main/build/**/*

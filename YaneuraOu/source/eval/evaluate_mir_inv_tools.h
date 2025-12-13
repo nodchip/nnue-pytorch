@@ -9,9 +9,8 @@
 #include "../evaluate.h"
 #include <functional>
 
-namespace YaneuraOu {
-namespace Eval {
-
+namespace Eval
+{
 	// -------------------------------------------------
 	//                  tables
 	// -------------------------------------------------
@@ -24,10 +23,10 @@ namespace Eval {
 	// これらの配列は、以下のKK/KKP/KPPクラスから参照される。
 
 	// あるBonaPieceを相手側から見たときの値を返す
-	Eval::BonaPiece inv_piece(Eval::BonaPiece p);
+	extern Eval::BonaPiece inv_piece(Eval::BonaPiece p);
 
 	// 盤面上のあるBonaPieceをミラーした位置にあるものを返す。
-	Eval::BonaPiece mir_piece(Eval::BonaPiece p);
+	extern Eval::BonaPiece mir_piece(Eval::BonaPiece p);
 
 
 	// mir_piece/inv_pieceの初期化のときに呼び出されるcallback
@@ -40,10 +39,8 @@ namespace Eval {
 	extern s16 inv_piece_[Eval::fe_end];
 
 	// この関数を明示的に呼び出すか、init()を呼び出すかしたときに、上のテーブルが初期化される。
-	void init_mir_inv_tables();
-
-} // namespace Eval
-} // namespace YaneuraOu
+	extern void init_mir_inv_tables();
+}
 
 #endif // defined(USE_EVAL_LIST)
 #endif // _EVALUATE_MIR_INV_TOOLS_

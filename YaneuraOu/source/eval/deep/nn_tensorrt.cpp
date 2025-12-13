@@ -6,11 +6,6 @@
 #include "unpack.cuh"
 //#include "dlshogi_types.h"
 
-using namespace std;
-
-namespace YaneuraOu {
-using namespace Tools;
-
 namespace {
 	void FatalError(const std::string& s) {
 		std::cerr << s << "\nAborting...\n";
@@ -71,6 +66,10 @@ void checkCudaErrors(cudaError_t status) {
 //	}
 //}
 
+
+using namespace std;
+using namespace Tools;
+
 namespace Eval::dlshogi
 {
 	// モデルファイルの読み込み。
@@ -90,25 +89,33 @@ namespace Eval::dlshogi
 		checkCudaErrors(cudaMalloc((void**)&y1_dev, sizeof(NN_Output_Policy) * max_batch_size));
 		checkCudaErrors(cudaMalloc((void**)&y2_dev, sizeof(NN_Output_Value)  * max_batch_size));
 
+		infer_inputBindings = { x1_dev, x2_dev, y1_dev, y2_dev };
+
 		return load_model(model_path);
 	}
 
 	void NNTensorRT::release()
 	{
-		// 安全のため、GPU IDをスレッドと関連付けてから開放する。
-		// ※　これは本来しなくても良いと思うのだが、ドライバー側の実装次第では
-		//     何か地雷を踏む可能性がなくはないので安全側に倒しておく。
+		// load()でメモリ確保を行った場合、inputBindings.size() == 4のはず。
+		if (infer_inputBindings.size())
+		{
+			// 安全のため、GPU IDをスレッドと関連付けてから開放する。
+			// ※　これは本来しなくても良いと思うのだが、ドライバー側の実装次第では
+			//     何か地雷を踏む可能性がなくはないので安全側に倒しておく。
 
-		// メモリを確保した時のCUDAデバイスを設定する。
-		set_device(gpu_id);
+			// メモリを確保した時のCUDAデバイスを設定する。
+			set_device(gpu_id);
 
-		// メモリの開放
-		checkCudaErrors(cudaFree(p1_dev));
-		checkCudaErrors(cudaFree(p2_dev));
-		checkCudaErrors(cudaFree(x1_dev));
-		checkCudaErrors(cudaFree(x2_dev));
-		checkCudaErrors(cudaFree(y1_dev));
-		checkCudaErrors(cudaFree(y2_dev));
+			// メモリの開放
+			checkCudaErrors(cudaFree(p1_dev));
+			checkCudaErrors(cudaFree(p2_dev));
+			checkCudaErrors(cudaFree(x1_dev));
+			checkCudaErrors(cudaFree(x2_dev));
+			checkCudaErrors(cudaFree(y1_dev));
+			checkCudaErrors(cudaFree(y2_dev));
+			infer_inputBindings.resize(0);
+
+		}
 	}
 
 	// 使用可能なデバイス数を取得する。
@@ -161,6 +168,9 @@ namespace Eval::dlshogi
 			FatalError("parseFromFile");
 		}
 
+		builder->setMaxBatchSize(max_batch_size);
+		config->setMaxWorkspaceSize(64_MiB);
+
 		// 教師局面なくてcalibration_cache用意できないのでコメントアウトしておく。(yane)
 #if 0
 		std::unique_ptr<nvinfer1::IInt8Calibrator> calibrator;
@@ -203,50 +213,6 @@ namespace Eval::dlshogi
 
 		ASSERT_LV3(network->getNbOutputs() == 2);
 
-#if defined(ENABLE_RYFAMATE_PATCH)
-	// testK FP32 softmax
-	if (true/*b_useFP16*/)
-	{
-		std::cout << "info string Ryfamate FP32 softmax patch." << std::endl;
-		config->setFlag(nvinfer1::BuilderFlag::kFP16);
-		config->setFlag(nvinfer1::BuilderFlag::kPREFER_PRECISION_CONSTRAINTS);
-		for (int i = 0; i < network->getNbLayers(); ++i) {
-			auto layer = network->getLayer(i);
-			auto layer_before = network->getLayer(i > 0 ? i - 1 : 0);
-			auto precition = layer->getPrecision();
-			std::string layername = layer->getName();
-
-			// debug output
-			// std::cout << "info string layer " << i << " type " << (int)layer->getType();
-			// if (layer->precisionIsSet())
-			// 	 std::cout << " prec_set " << (int)precition;
-			// else
-			// 	 std::cout << " prec_not_set";
-			// std::cout << " name " << layername << std::endl;
-
-			if (!layer->precisionIsSet()
-				// || precition == nvinfer1::DataType::kFLOAT
-				// || precition == nvinfer1::DataType::kHALF
-				)
-			{
-				if (layer->getType() == nvinfer1::LayerType::kSOFTMAX
-					// TODO: できれば汎用的なコードにする
-					|| (layer->getType() == nvinfer1::LayerType::kMATRIX_MULTIPLY && layername.find("blocks") != std::string::npos &&
-						layer_before->getType() == nvinfer1::LayerType::kELEMENTWISE)
-				){
-					// softmax層の精度をfp32に設定
-					layer->setPrecision(nvinfer1::DataType::kFLOAT);
-					// for (int j = 0; j < layer->getNbOutputs(); ++j) {
-						// layer->setOutputType(j, nvinfer1::DataType::kFLOAT);
-					// }
-					std::cout << "info string FP32 layer " << i << " type " << (int)layer->getType() << " name " << layername << std::endl;
-				}
-			}
-		}
-	}
-#endif
-
-
 		// Optimization Profiles
 		auto profile = builder->createOptimizationProfile();
 		const auto dims1 = inputDims[0].d;
@@ -258,7 +224,6 @@ namespace Eval::dlshogi
 		profile->setDimensions("input2", nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims4(max_batch_size, dims2[1], dims2[2], dims2[3]));
 		profile->setDimensions("input2", nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4(max_batch_size, dims2[1], dims2[2], dims2[3]));
 		config->addOptimizationProfile(profile);
-		config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE, 64_MiB);
 
 		// TensorRT 8 より nvinfer1::IBuilder::buildSerializedNetwork() が追加され、 nvinfer1::IBuilder::buildEngineWithConfig() は非推奨となった。
 		// nvinfer1::IBuilder::buildEngineWithConfig() は TensorRT 10.0 にて削除される見込み。
@@ -378,8 +343,8 @@ namespace Eval::dlshogi
 				return Tools::ResultCode::FileWriteError;
 		}
 
-		inputDims1 = infer_engine->getTensorShape("input1");
-		inputDims2 = infer_engine->getTensorShape("input2");
+		inputDims1 = infer_engine->getBindingDimensions(0);
+		inputDims2 = infer_engine->getBindingDimensions(1);
 
 		return Tools::ResultCode::Ok;
 	}
@@ -388,8 +353,8 @@ namespace Eval::dlshogi
 	{
 		inputDims1.d[0] = batch_size;
 		inputDims2.d[0] = batch_size;
-		infer_context->setInputShape("input1", inputDims1);
-		infer_context->setInputShape("input2", inputDims2);
+		infer_context->setBindingDimensions(0, inputDims1);
+		infer_context->setBindingDimensions(1, inputDims2);
 #if defined(UNPACK_CUDA)
 		checkCudaErrors(cudaMemcpyAsync(p1_dev, p1, sizeof(PType) * ((batch_size * ((int)COLOR_NB * (int)MAX_FEATURES1_NUM * (int)SQ_NB) + 7) >> 3), cudaMemcpyHostToDevice, cudaStreamPerThread));
 		checkCudaErrors(cudaMemcpyAsync(p2_dev, p2, sizeof(PType) * ((batch_size * ((int)MAX_FEATURES2_NUM) + 7) >> 3), cudaMemcpyHostToDevice, cudaStreamPerThread));
@@ -399,11 +364,7 @@ namespace Eval::dlshogi
 		checkCudaErrors(cudaMemcpyAsync(x1_dev, x1, sizeof(NN_Input1) * batch_size, cudaMemcpyHostToDevice, cudaStreamPerThread));
 		checkCudaErrors(cudaMemcpyAsync(x2_dev, x2, sizeof(NN_Input2) * batch_size, cudaMemcpyHostToDevice, cudaStreamPerThread));
 #endif
-		infer_context->setTensorAddress("input1", x1_dev);
-		infer_context->setTensorAddress("input2", x2_dev);
-		infer_context->setTensorAddress("output_policy", y1_dev);
-		infer_context->setTensorAddress("output_value", y2_dev);
-		const bool status = infer_context->enqueueV3(cudaStreamPerThread);
+		const bool status = infer_context->enqueue(batch_size, infer_inputBindings.data(), cudaStreamPerThread, nullptr);
 		ASSERT_LV3(status);
 		checkCudaErrors(cudaMemcpyAsync(y1, y1_dev, sizeof(NN_Output_Policy) * batch_size, cudaMemcpyDeviceToHost, cudaStreamPerThread));
 		checkCudaErrors(cudaMemcpyAsync(y2, y2_dev, sizeof(NN_Output_Value ) * batch_size, cudaMemcpyDeviceToHost, cudaStreamPerThread));
@@ -411,7 +372,6 @@ namespace Eval::dlshogi
 	}
 
 } // namespace Eval::dlshogi
-} // namespace YaneuraOu
 
 #endif // defined(YANEURAOU_ENGINE_DEEP) && defined (TENSOR_RT)
 

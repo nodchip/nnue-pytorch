@@ -29,11 +29,9 @@
 #include "trainer/trainer_feature_transformer.h"
 #include "trainer/trainer_input_slice.h"
 #include "trainer/trainer_affine_transform.h"
-#include "trainer/trainer_affine_transform_sparse_input.h"
 #include "trainer/trainer_clipped_relu.h"
 #include "trainer/trainer_sum.h"
 
-namespace YaneuraOu {
 namespace Eval {
 
 namespace NNUE {
@@ -121,8 +119,8 @@ void SetOptions(const std::string& options) {
 void RestoreParameters(const std::string& dir_name) {
   const std::string file_name = Path::Combine(dir_name, NNUE::kFileName);
   std::ifstream stream(file_name, std::ios::binary);
-  Tools::Result result = ReadParameters(stream);
-  ASSERT(result.is_ok());
+  bool result = ReadParameters(stream);
+  ASSERT(result);
 
   SendMessages({{"reset"}});
 }
@@ -240,7 +238,6 @@ double get_eta() {
   return NNUE::GetGlobalLearningRateScale() * EvalLearningTools::Weight::eta;
 }
 
-} // namespace Eval
-} // namespace YaneuraOu
+}  // namespace Eval
 
 #endif  // defined(EVAL_LEARN) && defined(EVAL_NNUE)

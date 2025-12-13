@@ -10,8 +10,9 @@
 
 #include <set>
 
-namespace YaneuraOu {
-namespace Eval::NNUE {
+namespace Eval {
+
+namespace NNUE {
 
 namespace {
 
@@ -19,7 +20,7 @@ namespace {
 void TestFeatures(Position& pos) {
   const std::uint64_t num_games = 1000;
   StateInfo si;
-  pos.set_hirate(&si);
+  pos.set_hirate(&si,Threads.main());
   const int MAX_PLY = 256; // 256手までテスト
 
   StateInfo state[MAX_PLY]; // StateInfoを最大手数分だけ
@@ -107,7 +108,7 @@ void TestFeatures(Position& pos) {
       ASSERT(index_sets == make_index_sets(pos));
     }
 
-    pos.set_hirate(&si);
+    pos.set_hirate(&si,Threads.main());
 
     // 100回に1回ごとに'.'を出力(進んでいることがわかるように)
     if ((i % 100) == 0)
@@ -148,14 +149,15 @@ void PrintInfo(std::istream& stream) {
 
     std::uint32_t hash_value;
     std::string architecture;
-    const Tools::Result result = [&]() {
+    const bool success = [&]() {
       std::ifstream file_stream(file_name, std::ios::binary);
-      if (!file_stream) return Tools::Result(Tools::ResultCode::FileReadError);
-	  return ReadHeader(file_stream, &hash_value, &architecture);
+      if (!file_stream) return false;
+      if (!ReadHeader(file_stream, &hash_value, &architecture)) return false;
+      return true;
     }();
 
     std::cout << file_name << ": ";
-    if (result.is_ok()) {
+    if (success) {
       if (hash_value == kHashValue) {
         std::cout << "matches with this binary";
         if (architecture != GetArchitectureString()) {
@@ -189,7 +191,8 @@ void TestCommand(Position& pos, std::istream& stream) {
   }
 }
 
-} // namespace Eval::NNUE
-} // namespace YaneuraOu
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(ENABLE_TEST_CMD) && defined(EVAL_NNUE)

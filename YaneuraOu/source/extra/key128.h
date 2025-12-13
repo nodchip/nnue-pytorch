@@ -1,9 +1,7 @@
-﻿#ifndef KEY128_H_INCLUDED
-#define KEY128_H_INCLUDED
+﻿#ifndef _KEY128_H_
+#define _KEY128_H_
 
 #include "../types.h"
-
-namespace YaneuraOu {
 
 // --------------------
 //     拡張hash key
@@ -20,9 +18,8 @@ namespace YaneuraOu {
 
 // 置換表で用いるためにPositionクラスから得られるhash keyを64bit版の他に128,256bitに変更することが出来るのでそのための構造体。
 
-// hash key 64bit版
-using Key64 = uint64_t;
-
+// 64bit版
+typedef uint64_t Key64;
 
 // 128bit版
 struct alignas(16) Key128
@@ -39,7 +36,7 @@ struct alignas(16) Key128
 	Key128() {}
 
 	// kを下位64bitに格納する(上位64bitは0)
-	Key128(const Key64& k) { set(k, 0); }
+	Key128(const Key& k) { set(k, 0); }
 
 #if defined (USE_SSE2)
 	Key128(const Key128& bb) { _mm_store_si128(&this->m, bb.m); }
@@ -49,7 +46,7 @@ struct alignas(16) Key128
 #endif
 
 	// 下位64bitをk0、上位64bitをk1にする。
-	void set(Key64 k0, Key64 k1) {
+	void set(Key k0, Key k1) {
 #if defined(USE_SSE2)
 	m = _mm_set_epi64x(k1,k0);
 #else
@@ -98,17 +95,16 @@ struct alignas(16) Key128
 
 	Key128 operator + (const Key128& rhs) const { return Key128(*this) += rhs; }
 	Key128 operator ^ (const Key128& rhs) const { return Key128(*this) ^= rhs; }
+};
 
-	// sortなどで使うために比較演算子を定義しておく。
-    bool operator < (const Key128& rhs) const {
-        if (this->p[0] != rhs.p[0]) {
-            return this->p[0] < rhs.p[0];
-        }
-        return this->p[1] < rhs.p[1];
-    }
+// std::unorded_map<Key128,string>みたいなのを使うときにoperator==とhash化が必要。
 
-	// Key64への暗黙の変換子
-	operator Key64() const { return static_cast<int64_t>(extract64<0>()); }
+template <>
+struct std::hash<Key128> {
+	size_t operator()(const Key128& k) const {
+		// 下位bit返すだけで良いのでは？
+		return (size_t)(k.extract64<0>());
+	}
 };
 
 static std::ostream& operator << (std::ostream& os, const Key128& k)
@@ -131,14 +127,14 @@ struct alignas(32) Key256
 #endif
 
 	Key256() {}
-	Key256(const Key64& k) { set(k, 0, 0, 0); }
+	Key256(const Key& k) { set(k, 0, 0, 0); }
 #if defined(USE_AVX2)
 	Key256(const Key256& bb) { _mm256_store_si256(&this->m, bb.m); }
 	Key256& operator = (const Key256& rhs) { _mm256_store_si256(&this->m, rhs.m); return *this; }
 #endif
 
 	// 下位64bitから順にk0, k1, k2, k3に設定する。
-	void set(Key64 k0, Key64 k1, Key64 k2, Key64 k3) {
+	void set(Key k0, Key k1, Key k2, Key k3) {
 #if defined(USE_AVX2)
 	m = _mm256_set_epi64x(k3, k2, k1, k0);
 #else
@@ -153,10 +149,8 @@ struct alignas(32) Key256
 	u64 extract64() const
 	{
 		static_assert(n == 0 || n == 1 || n == 2 || n == 3 , "");
-	#if defined(USE_AVX2) && defined(IS_64BIT)
+	#if defined(USE_AVX2)
 		return (u64)(_mm256_extract_epi64(m, n));
-		// ⇨ gcc/clangだと32bit環境で、この命令が定義されていなくてコンパイルエラーになる。
-		//		コンパイラ側のバグっぽい。仕方ないので、この命令を使うのは64bit環境の時のみにする。
 	#else
 		return p[n];
 	#endif
@@ -187,8 +181,14 @@ struct alignas(32) Key256
 	Key256 operator + (const Key256& rhs) const { return Key256(*this) += rhs; }
 	Key256 operator ^ (const Key256& rhs) const { return Key256(*this) ^= rhs; }
 
-	// Key64への暗黙の変換子
-    operator Key64() const { return static_cast<int64_t>(extract64<0>()); }
+};
+
+template <>
+struct std::hash<Key256> {
+	size_t operator()(const Key256& k) const {
+		// 下位bit返すだけで良いのでは？
+		return (size_t)(k.extract64<0>());
+	}
 };
 
 static std::ostream& operator << (std::ostream& os, const Key256& k)
@@ -198,25 +198,9 @@ static std::ostream& operator << (std::ostream& os, const Key256& k)
 	return os;
 }
 
-} // namespace YaneuraOu
+// HASH_KEYをKeyに変換する。
+static Key hash_key_to_key(const Key     key) { return key               ; }
+static Key hash_key_to_key(const Key128& key) { return key.extract64<0>(); }
+static Key hash_key_to_key(const Key256& key) { return key.extract64<0>(); }
 
-// std::unorded_map<Key128,string>みたいなのを使うときにoperator==とhash化が必要。
-// ⚠ これはglobal namespaceで定義しないと駄目。
-
-template <>
-struct std::hash<YaneuraOu::Key128> {
-	size_t operator()(const YaneuraOu::Key128& k) const {
-		// 下位bit返すだけで良いのでは？
-		return (size_t)(k.extract64<0>());
-	}
-};
-
-template <>
-struct std::hash<YaneuraOu::Key256> {
-	size_t operator()(const YaneuraOu::Key256& k) const {
-		// 下位bit返すだけで良いのでは？
-		return (size_t)(k.extract64<0>());
-	}
-};
-
-#endif // ifndef KEY128_H_INCLUDED
+#endif // _KEY128_H_

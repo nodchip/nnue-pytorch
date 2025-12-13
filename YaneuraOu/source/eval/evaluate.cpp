@@ -4,7 +4,6 @@
 #include "../misc.h"
 #include <map>
 
-namespace YaneuraOu {
 namespace Eval
 {
 #if !defined(USE_EVAL)
@@ -31,12 +30,12 @@ namespace Eval
 		int v = VALUE_ZERO;
 
 		for (auto i : SQ)
-			v += PieceValueM[pos.piece_on(i)];
+			v = v + PieceValue[pos.piece_on(i)];
 
 		// 手駒も足しておく
 		for (auto c : COLOR)
-			for (auto pt = PAWN; pt < PIECE_HAND_NB; ++pt)
-				v += (c == BLACK ? 1 : -1) * Value(hand_count(pos.hand_of(c), pt) * PieceValue[pt]);
+			for (auto pc = PAWN; pc < PIECE_HAND_NB; ++pc)
+				v += (c == BLACK ? 1 : -1) * Value(hand_count(pos.hand_of(c), pc) * PieceValue[pc]);
 
 		return (Value)v;
 	}
@@ -174,4 +173,3 @@ namespace Eval
 #endif
 
 } // namespace Eval
-} // namespace YaneuraOu

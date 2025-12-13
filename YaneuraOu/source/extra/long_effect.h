@@ -8,8 +8,6 @@
 
 #if defined (LONG_EFFECT_LIBRARY)
 
-namespace YaneuraOu {
-
 struct Bitboard;
 
 // ----------------------
@@ -342,9 +340,7 @@ namespace LongEffect
 
   // --- initialize for LONG_EFFECT_LIBRARY
   void init();
-
-} // namespace Effect8
-} // namespace YaneuraOu
+}
 
 #endif // LONG_EFFECT_LIBRARY
 

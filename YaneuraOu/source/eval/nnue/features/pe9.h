@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の入力特徴量PE9の定義
 
-#ifndef CLASSIC_NNUE_FEATURES_PE9_H
-#define CLASSIC_NNUE_FEATURES_PE9_H
+#ifndef _NNUE_FEATURES_PE9_H_
+#define _NNUE_FEATURES_PE9_H_
 
 #include "../../../config.h"
 
@@ -10,8 +10,11 @@
 #include "../../../evaluate.h"
 #include "features_common.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE::Features {
+namespace Eval {
+
+namespace NNUE {
+
+namespace Features {
 
 // 特徴量PE9：玉以外の駒のBonaPieceと利き数の組み合わせ
 // ・利き数は先後各々最大2までに制限。0～2で3通り。先後で3*3=9通り。なお、持ち駒の場合は利き数0とする。
@@ -46,8 +49,11 @@ class PE9 {
                         BonaPiece** pieces);
 };
 
-} // namespace Eval::NNUE::Features
-} // namespace YaneuraOu
+}  // namespace Features
+
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_NNUE)
 

@@ -3,13 +3,11 @@
 
 #include <atomic>
 #include <condition_variable>
-//#include <cstddef>
-//#include <cstdint>
 #include <mutex>
+#include <thread>
 #include <vector>
 
-#include "memory.h"
-#include "numa.h"
+#include "movepick.h"
 #include "position.h"
 #include "search.h"
 #include "thread_win32_osx.h"
@@ -19,96 +17,46 @@
 #include "tt.h"
 #endif
 
-namespace YaneuraOu {
-
-// --------------------
-// スレッドの属するNumaを管理する
-// --------------------
-
-// Sometimes we don't want to actually bind the threads, but the recipient still
-// needs to think it runs on *some* NUMA node, such that it can access structures
-// that rely on NUMA node knowledge. This class encapsulates this optional process
-// such that the recipient does not need to know whether the binding happened or not.
-
-// 時にはスレッドを実際にバインドしたくない場合もありますが、
-// 受け手側は、それが 何らかの NUMAノード上で実行されていると認識する必要があります。
-// これは、NUMAノードに関する情報を必要とする構造体にアクセスするためです。
-// このクラスは、このバインドが行われたかどうかを受け手が知る必要がないように、
-// このオプションのプロセスをカプセル化します。
-
-class OptionalThreadToNumaNodeBinder {
-public:
-	OptionalThreadToNumaNodeBinder(NumaIndex n) :
-		numaConfig(nullptr),
-		numaId(n) {}
-
-	OptionalThreadToNumaNodeBinder(const NumaConfig& cfg, NumaIndex n) :
-		numaConfig(&cfg),
-		numaId(n) {}
-
-	/*
-	 📝 OptionalThreadToNumaNodeBinder binder;
-         に対してbinder() とやるとこのoperatorが呼び出されて、
-	     NumaReplicatedAccessTokenがもらえる。
-	 
-	     そのあと (void) (networks[numaAccessToken]); とやると
-	     (これは、Search::Worker::ensure_network_replicated()で行っている)
-	     適切なNUMAに割り当てられるようになっている。
-	 
-	     これは、LazyNumaReplicatedのoperator[]でensure_present()が呼び出されて
-	     NumaConfig.execute_on_numa_node()が呼び出されるからである。
-	*/
-	NumaReplicatedAccessToken operator()() const {
-		if (numaConfig != nullptr)
-			// このスレッドを適切なNUMAで実行できるようにOSレベルでbindする。
-			return numaConfig->bind_current_thread_to_numa_node(numaId);
-		else
-			return NumaReplicatedAccessToken(numaId);
-	}
-
-private:
-	const NumaConfig* numaConfig;
-	NumaIndex         numaId;
-};
-
-
 // --------------------
 // 探索時に用いるスレッド
 // --------------------
 
-// Abstraction of a thread. It contains a pointer to the worker and a native thread.
-// After construction, the native thread is started with idle_loop()
-// waiting for a signal to start searching.
-// When the signal is received, the thread starts searching and when
-// the search is finished, it goes back to idle_loop() waiting for a new signal.
+// 探索時に用いる、それぞれのスレッド
+// これを思考スレッド数だけ確保する。
+// ただしメインスレッドはこのclassを継承してMainThreadにして使う。
+class Thread
+{
+	// exitフラグやsearchingフラグの状態を変更するときのmutex
+	std::mutex mutex;
 
-// (探索用の)スレッドの抽象化です。これはワーカーへのポインタとネイティブスレッドを含みます。
-// 構築後、ネイティブスレッドは idle_loop() で開始され、開始信号を待ちます。
-// 信号を受け取るとスレッドは検索を開始し、検索が終了すると再び idle_loop() に戻り、新しい信号を待ちます。
-// ⇨  探索時に用いる、それぞれのスレッド。これを探索用スレッド数だけ確保する。
-//    ただしメインスレッドはこのclassを継承してMainThreadにして使う。
+	// idle_loop()で待機しているときに待つ対象
+	std::condition_variable cv;
 
-namespace Search {
-	class Worker;
-	typedef std::function<LargePagePtr<Worker>(size_t /*thread_idx*/, NumaReplicatedAccessToken /*token*/)> WorkerFactory;
-}
+	// thread id。main threadなら0。slaveなら1から順番に値が割当てられる。
+	size_t idx;
 
-class Thread {
+	// exit      : このフラグが立ったら終了する。
+	// searching : 探索中であるかを表すフラグ。プログラムを簡素化するため、事前にtrueにしてある。
+	bool exit = false , searching = true;
+
+	// stack領域を増やしたstd::thread
+	NativeThread stdThread;
+
 public:
 
-	// thread_id : ThreadPoolで何番目のthreadであるか。この値は、idx(スレッドID)となる。
-	Thread(
-#if STOCKFISH
-		Search::SharedState&,
-		std::unique_ptr<Search::ISearchManager>,
-#else
-		// 📌 やねうら王では、SharedStateとISearchManagerを使わずに、Workerのfactoryを使ってWorkerを直接生成する。
-		Search::WorkerFactory          factory,
-#endif
-		size_t                         thread_id,
-		OptionalThreadToNumaNodeBinder binder
-	);
+	// ThreadPoolで何番目のthreadであるかをコンストラクタで渡すこと。この値は、idx(スレッドID)となる。
+	explicit Thread(size_t n);
 	virtual ~Thread();
+
+	// slaveは、main threadから
+	//   for(auto th : Threads) th->start_searching();
+	// のようにされるとこの関数が呼び出される。
+	// MainThread::search()はvirtualになっていてthink()が呼び出されるので、MainThread::think()から
+	// この関数を呼び出したいときは、Thread::search()とすること。
+	virtual void search();
+
+	// このクラスが保持している探索で必要なテーブル(historyなど)をクリアする。
+	void clear();
 
 	// スレッド起動後、この関数が呼び出される。
 	void idle_loop();
@@ -117,234 +65,248 @@ public:
 	//      同期待ちのwait等
 	// ------------------------------
 
-	// workerに探索を開始させる。
-	// 📝 "go"コマンドに対して呼び出される。
+	// Thread::search()を開始させるときに呼び出す。
 	void start_searching();
 
-	// このクラスが保持している探索で必要なテーブル(historyなど)をクリアする。
-	// 📝 "usinewgame"に対して呼び出される。
-	void clear_worker();
-
-	// jobを実行する。jobは引数fで渡す。
-	void run_custom_job(std::function<void()> f);
-
-	// 評価関数パラメーターが、このthreadが属するNUMAにも配置されているかを確かめて、
-	// 配置されていなければ、評価関数パラメーターをコピーする。
-	void ensure_network_replicated();
-
-	// Thread has been slightly altered to allow running custom jobs, so
-	// this name is no longer correct. However, this class (and ThreadPool)
-	// require further work to make them properly generic while maintaining
-	// appropriate specificity regarding search, from the point of view of an
-	// outside user, so renaming of this function is left for whenever that happens.
-
-	// スレッドはカスタムジョブを実行できるように少し変更されたため、
-	// この名前（関数名）はもはや正確ではありません。
-	// ただし、このクラス（および ThreadPool）は、外部の利用者から見て
-	// 探索に関する適切な特異性を維持しつつ、真に汎用的にするための
-	// さらなる作業が必要なため、この関数のリネームはその作業が
-	// 実施される時まで保留されています。
-
-	// start_searching()で開始した探索の終了を待機する。
-	// 💡 searchingフラグがfalseになるのを待つ。
-
-	void   wait_for_search_finished();
+	// 探索が終わるのを待機する。(searchingフラグがfalseになるのを待つ)
+	void wait_for_search_finished();
 
 	// Threadの自身のスレッド番号を返す。0 origin。
-	// コンストラクタで渡したthread_idが返ってくる。
 	size_t id() const { return idx; }
 
-	// 実行しているworker
-	LargePagePtr<Search::Worker> worker;
+	// === やねうら王独自拡張 ===
 
-	// 実行しているjob
-	std::function<void()>           jobFunc;
+	// 探索中であるかを返す。
+	bool is_searching() const { return searching; }
 
-private:
-	// exitフラグやsearchingフラグの状態を変更するときのmutex
-	std::mutex                mutex;
+	// ------------------------------
+	//       探索に必要なもの
+	// ------------------------------
 
-	// idle_loop()で待機しているときに待つ対象
-	std::condition_variable   cv;
+	// pvIdx    : このスレッドでMultiPVを用いているとして、rootMovesの(0から数えて)何番目のPVの指し手を
+	//      探索中であるか。MultiPVでないときはこの変数の値は0。
+	// pvLast   : tbRank絡み。将棋では関係ないので用いない。
+	size_t pvIdx /*,pvLast*/;
 
-	// thread id。main threadなら0。slaveなら1から順番に値が割当てられる。
-	// nthreadsは、スレッド数。(options["Threads"]の値)
-	size_t                    idx
-#if STOCKFISH
-          // 📌 nthreads使わないと思う。やねうら王ではコメントアウト
-          , nthreads
+	//RunningAverage complexityAverage;
+	// →　やねうら王では導入せず
+
+	// nodes     : このスレッドが探索したノード数(≒Position::do_move()を呼び出した回数)
+	// bestMoveChanges : 反復深化においてbestMoveが変わった回数。nodeの安定性の指標として用いる。全スレ分集計して使う。
+	std::atomic<uint64_t> nodes,/* tbHits,*/ bestMoveChanges;
+
+	// selDepth  : rootから最大、何手目まで探索したか(選択深さの最大)
+	// nmpMinPly : null moveの前回の適用ply
+	// nmpColor  : null moveの前回の適用Color
+	// state     : 探索で組合せ爆発が起きているか等を示す状態
+	int selDepth, nmpMinPly;
+	Color nmpColor;
+
+	// bestValue :
+	// search()で、そのnodeでbestMoveを指したときの(探索の)評価値
+	// Stockfishではevaluate()の遅延評価のためにThreadクラスに持たせることになった。
+	// cf. Reduce use of lazyEval : https://github.com/official-stockfish/Stockfish/commit/7b278aab9f61620b9dba31896b38aeea1eb911e2
+	// optimism  : 楽観値
+	// → やねうら王では導入せず
+	Value bestValue /*, optimism[COLOR_NB]*/ ;
+
+	// 探索開始局面
+	Position rootPos;
+
+	// rootでのStateInfo
+	// Position::set()で書き換えるのでスレッドごとに保持していないといけない。
+	StateInfo rootState;
+
+	// 探索開始局面で思考対象とする指し手の集合。
+	// goコマンドで渡されていなければ、全合法手(ただし歩の不成などは除く)とする。
+	Search::RootMoves rootMoves;
+
+	// rootDepth      : 反復深化の深さ
+	//					Lazy SMPなのでスレッドごとにこの変数を保有している。
+	//
+	// completedDepth : このスレッドに関して、終了した反復深化の深さ
+	//
+	Depth rootDepth, completedDepth;
+
+#if defined(__EMSCRIPTEN__)
+	// yaneuraou.wasm
+	std::atomic_bool threadStarted;
 #endif
-		;
 
-	// exit      : このフラグが立ったら終了する。
-	// searching : 探索中であるかを表すフラグ。プログラムを簡素化するため、事前にtrueにしてある。
-	bool                      exit = false, searching = true;  // Set before starting std::thread
-															   // std::threadが始まる前にセットされる
+	// aspiration searchのrootでの beta - alpha
+	Value rootDelta;
 
-	// stack領域を増やしたstd::thread
-	// Workerは、このthreadに割り当てて実行する。
-	NativeThread              stdThread;
+#if defined(USE_MOVE_PICKER)
+	// 近代的なMovePickerではオーダリングのために、スレッドごとにhistoryとcounter movesなどのtableを持たないといけない。
+	CounterMoveHistory counterMoves;
+	ButterflyHistory mainHistory;
+	CapturePieceToHistory captureHistory;
 
-	// このスレッドおよび評価関数パラメーターが、どのNUMAに属するか。
-	NumaReplicatedAccessToken numaAccessToken;
+	// コア数が多いか、長い持ち時間においては、ContinuationHistoryもスレッドごとに確保したほうが良いらしい。
+	// cf. https://github.com/official-stockfish/Stockfish/commit/5c58d1f5cb4871595c07e6c2f6931780b5ac05b5
+	// 添字の[2][2]は、[inCheck(王手がかかっているか)][captureOrPawnPromotion]
+	// →　この改造、レーティングがほぼ上がっていない。悪い改造のような気がする。
+	ContinuationHistory continuationHistory[2][2];
+
+#endif
+
+	// Stockfish10ではスレッドごとにcontemptを保持するように変わった。
+	//Score contempt;
+
+	// trendは千日手を受け入れるスコア。動的に変更する。(dynamic contempt)
+	// 勝ってるほうは千日手にはしたくないし、負けてるほうは千日手やむなしという…。
+	//Value trend;
+	// →　やねうら王ではこの値、使わないことにする。
+
+	// ------------------------------
+	//   やねうら王、独自追加
+	// ------------------------------
+
+	// スレッドidが返る。Stockfishにはないメソッドだが、
+	// スレッドごとにメモリ領域を割り当てたいときなどに必要となる。
+	// MainThreadなら0、slaveなら1,2,3,...
+	size_t thread_id() const { return idx; }
+
+#if defined(EVAL_LEARN)
+	// 学習用の実行ファイルでは、スレッドごとに置換表を持ちたい。
+	TranspositionTable tt;
+#endif
+
 };
 
+
+// 探索時のmainスレッド(これがmasterであり、これ以外はslaveとみなす)
+struct MainThread: public Thread
+{
+	// constructorはThreadのものそのまま使う。
+	using Thread::Thread;
+
+	// 探索を開始する時に呼び出される。
+	void search() override;
+
+	// Thread::search()を呼び出す。
+	// ※　Stockfish、MainThreadがsearch()をoverrideする設計になっているの、良くないと思う。
+	//     そのため、MainThreadに対して外部からThread::search()を呼び出させることが出来ない。
+	//     仕方ないのでこれを回避するために抜け道を用意しておく。
+	void thread_search() { Thread::search(); }
+
+	// 思考時間の終わりが来たかをチェックする。
+	void check_time();
+
+	// previousTimeReduction : 反復深化の前回のiteration時のtimeReductionの値。
+	double previousTimeReduction;
+
+	// 前回の探索時のスコアとその平均。
+	// 次回の探索のときに何らか使えるかも。
+	Value bestPreviousScore;
+	Value bestPreviousAverageScore;
+
+	// 時間まぎわのときに探索を終了させるかの判定に用いるための、
+	// 反復深化のiteration、前4回分のScore
+	Value iterValue[4];
+
+	// check_time()で用いるカウンター。
+	// デクリメントしていきこれが0になるごとに思考をストップするのか判定する。
+	int callsCnt;
+
+	//bool stopOnPonderhit;
+	// →　やねうら王では、このStockfishのponderの仕組みを使わない。(もっと上手にponderの時間を活用したいため)
+
+	// ponder : "go ponder" コマンドでの探索中であるかを示すフラグ
+	std::atomic_bool ponder;
+
+	// -------------------
+	// やねうら王独自追加
+	// -------------------
+
+	// 将棋所のコンソールが詰まるので出力を抑制するために、前回の出力時刻を
+	// 記録しておき、そこから一定時間経過するごとに出力するという方式を採る。
+	TimePoint lastPvInfoTime;
+
+	// Ponder用の指し手
+	// Stockfishは置換表からponder moveをひねり出すコードになっているが、
+	// 前回iteration時のPVの2手目の指し手で良いのではなかろうか…。
+	Move ponder_candidate;
+
+	// "Position"コマンドで1つ目に送られてきた文字列("startpos" or sfen文字列)
+	std::string game_root_sfen;
+
+	// "Position"コマンドで"moves"以降にあった、rootの局面からこの局面に至るまでの手順
+	std::vector<Move> moves_from_game_root;
+
+	// Stochastic Ponderのときに↑を2手前に戻すので元の"position"コマンドと"go"コマンドの文字列を保存しておく。
+	std::string last_position_cmd_string = "position startpos";
+	std::string last_go_cmd_string;
+	// Stochastic Ponderのために2手前に戻してしまっているかのフラグ
+	bool position_is_dirty = false;
+};
+
+
 // 思考で用いるスレッドの集合体
-
-// ThreadPool struct handles all the threads-related stuff like init, starting,
-// parking and, most importantly, launching a thread. All the access to threads
-// is done through this class.
-
-// ThreadPool構造体は、スレッドの初期化、起動、待機、
-// そして最も重要なスレッドの実行など、スレッドに関するすべての処理を扱います。
-// スレッドへのすべてのアクセスは、このクラスを通して行われます。
-
-class ThreadPool {
-public:
-	ThreadPool() {}
-
-	~ThreadPool() {
-		// destroy any existing thread(s)
-		// 存在するthreadを解体する
-
-		if (threads.size() > 0)
-		{
-			main_thread()->wait_for_search_finished();
-
-			threads.clear();
-		}
-	}
-
-	ThreadPool(const ThreadPool&) = delete;
-	ThreadPool(ThreadPool&&) = delete;
-
-	ThreadPool& operator=(const ThreadPool&) = delete;
-	ThreadPool& operator=(ThreadPool&&) = delete;
-
+// 継承はあまり使いたくないが、for(auto* th:Threads) ... のようにして回せて便利なのでこうしてある。
+//
+// このクラスにコンストラクタとデストラクタは存在しない。
+// Threads(スレッドオブジェクト)はglobalに配置するし、スレッドの初期化の際には
+// スレッドが保持する思考エンジンが使う変数等がすべてが初期化されていて欲しいからである。
+// スレッドの生成はset(options["Threads"])で行い、スレッドの終了はset(0)で行なう。
+struct ThreadPool: public std::vector<Thread*>
+{
 	// mainスレッドに思考を開始させる。
-	void   start_thinking(const OptionsMap&, Position&, StateListPtr&, Search::LimitsType);
-
-	// 指定したthreadIdのthreadで、jobとしてfを実行する。
-	void   run_on_thread(size_t threadId, std::function<void()> f);
-
-	// 指定したthreadIdのthreadが、jobを実行終わるのを待つ。
-	void   wait_on_thread(size_t threadId);
-
-	// このThreadPoolが保持しているthread数
-	size_t num_threads() const;
+	void start_thinking(const Position& pos, StateListPtr& states , const Search::LimitsType& limits , bool ponderMode = false);
 
 	// set()で生成したスレッドの初期化
-    // 💡 各ThreadのWorkerに対してclear()が呼び出される。
-    void clear();
+	void clear();
 
-	// requested_threadsの数になるように、スレッド数を変更する。
-    // 💡 各ThreadのWorkerに対してclear()が1度以上呼び出されることは保証されている。
-    void set(const NumaConfig&            numaConfig,
-#if STOCKFISH
-             Search::SharedState,
-             const Search::SearchManager::UpdateContext&);
-#else
-             const OptionsMap&            options,
-             size_t                       requested_threads,
-             const Search::WorkerFactory& worker_factory);
-#endif
-    /*
-	   💡 Stockfishでは、
-            Search::SharedState,
-            const Search::SearchManager::UpdateContext&
-         を渡しているが、やねうら王ではこれらを分離する。
-
-		 また、Stockfishでは、options["Threads"]から生成するスレッド数を決めているが、
-         やねうら王では、DL系でこのエンジンオプションからスレッド数をを決めたくないので
-         ここに柔軟性を持たせる。
-    
-       📝 スレッド数を変更するということは、スレッド数が足りなければ、スレッドを生成しなければならない。
-           スレッド(Thread class)は、その実行jobとしてWorker classの派生classを持っているので、
-           スレッド生成のためにはWorkerの生成を行う能力が必要である。そのため、ここでは、WorkerFactoryを渡している。
-    
-       ⚠ このmethodはEngine::resize_threads()からのみ呼び出される。
-    */
-
-#if STOCKFISH
-	Search::SearchManager* main_manager();
-#else
-	// 📝 やねうら王では、SearchManagerはEngine派生classが持つように変更した。
-#endif
+	// スレッド数を変更する。
+	// 終了時は明示的にset(0)として呼び出すこと。(すべてのスレッドの終了を待つ必要があるため)
+	void set(size_t requested);
 
 	// mainスレッドを取得する。これはthis[0]がそう。
-    Thread* main_thread() const { return threads.front().get(); }
+	MainThread* main() { return static_cast<MainThread*>(at(0)); }
 
 	// 今回、goコマンド以降に探索したノード数
-    // →　これはPosition::do_move()を呼び出した回数。
-    // ※　dlshogiエンジンで、探索ノード数が知りたい場合は、
-    // 　dlshogi::nodes_visited()を呼び出すこと。
-    uint64_t nodes_searched() const;
+	// →　これはPosition::do_move()を呼び出した回数。
+	// ※　dlshogiエンジンで、探索ノード数が知りたい場合は、
+	// 　dlshogi::nodes_visited()を呼び出すこと。
+	uint64_t nodes_searched() { return accumulate(&Thread::nodes); }
 
-#if STOCKFISH
-	// 💡 tablebaseにhitした回数。将棋では使わない。
-	uint64_t               tb_hits() const;
+	// 探索終了時に、一番良い探索ができていたスレッドを選ぶ。
+	Thread* get_best_thread() const;
 
-	// ⚠ これは、やねうら王の標準探索エンジンでしか使わないので、
-    //     YaneuraOuEngine側に移動させる。
-	Thread*  get_best_thread() const;
-#endif
+	// 探索を開始する(main thread以外)
+	void start_searching();
 
-	// メイン以外のすべてのスレッドのstart_searching()を呼び出す。(並列探索の開始)
-    // 💡 このmethodはmainスレッドで呼び出す。
-    void start_searching();
+	// main threadがそれ以外の探索threadの終了を待つ。
+	void wait_for_search_finished() const;
 
-	// 探索の終了(すべてのスレッドの終了)を待つ
-    // start_searching()で開始したすべてのスレッドの終了を待つ。
-    void wait_for_search_finished() const;
+	// stop          : 探索中にこれがtrueになったら探索を即座に終了すること。
+	// increaseDepth : 一定間隔ごとに反復深化の探索depthが増えて行っているかをチェックするためのフラグ
+	//                 増えて行ってないなら、同じ深さを再度探索するのに用いる。
+	std::atomic_bool stop , increaseDepth;
 
+	// === やねうら王独自拡張 ===
 
-	std::vector<size_t> get_bound_thread_count_by_numa_node() const;
-
-	// 評価関数パラメーターがいま実行しているNUMAに配置されているようにする。
-	void ensure_network_replicated();
-
-	// stop          : 探索の停止フラグ
-	// abortedSearch : 探索自体を破棄するためのフラグ
-	//		           🤔 このフラグ、必要なのか？
-	// increaseDepth : aspiration searchでdepthが増えていっているかのフラグ
-	//                 🤔 このフラグはSearchManagerに移動
-
-	std::atomic_bool stop, abortedSearch
-#if STOCKFISH
-		, increaseDepth
-#endif
-		;
-
-	auto cbegin() const noexcept { return threads.cbegin(); }
-	auto begin() noexcept { return threads.begin(); }
-	auto end() noexcept { return threads.end(); }
-	auto cend() const noexcept { return threads.cend(); }
-	auto size() const noexcept { return threads.size(); }
-	auto empty() const noexcept { return threads.empty(); }
-
-	// 抱えているすべてのThread
-	// 💡 Stockfishではprivate memberなのだが、
-	//     やねうら王ではEngine派生class側からアクセスしたいことがあるのでpublicに変更。
-	std::vector<std::unique_ptr<Thread>> threads;
+	// main thread以外の探索スレッドがすべて終了しているか。
+	// すべて終了していればtrueが返る。
+	bool search_finished() const;
 
 private:
-	// 現局面までのStateInfoのlist
-	StateListPtr                         setupStates;
 
-	// 各threadに対応するNUMAのindex
-	std::vector<NumaIndex>               boundThreadToNumaNode;
+	// 現局面までのStateInfoのlist
+	StateListPtr setupStates;
 
 	// Threadクラスの特定のメンバー変数を足し合わせたものを返す。
-	// 💡 nodesの集計に用いる。
-	uint64_t accumulate(std::atomic<uint64_t> Search::Worker::* member) const {
+	uint64_t accumulate(std::atomic<uint64_t> Thread::* member) const {
 
 		uint64_t sum = 0;
-		for (auto&& th : threads)
-			sum += (th->worker.get()->*member).load(std::memory_order_relaxed);
+		for (Thread* th : *this)
+			sum += (th->*member).load(std::memory_order_relaxed);
 		return sum;
 	}
 };
 
-} // namespace YaneuraOu
+// ThreadPoolのglobalな実体
+extern ThreadPool Threads;
 
 #endif // #ifndef THREAD_H_INCLUDED
+

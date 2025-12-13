@@ -14,8 +14,6 @@
 
 #include <cstring>	// std::memset()
 
-namespace YaneuraOu {
-
 // Effect8::operator<<()で用いるヘルパー関数
 // 3*3ならN=3 , 5*5ならN=5..
 std::ostream& output_around_n(std::ostream& os, uint32_t d,int n)
@@ -173,7 +171,7 @@ namespace Effect24
       ((b.p[0] >> int(sq - SQ_33)) | (b.p[1] << int(SQ_93 + SQ_L - sq))); // p[1]のSQ_93の左は、p[0]のSQ_33
 
     // PEXTで24近傍の状態を回収。
-    return (Directions)PEXT64(t, 0b11111000011111000011011000011111000011111ULL);
+    return (Directions)PEXT64(t, 0b11111000011111000011011000011111000011111);
   }
 
   std::ostream& operator<<(std::ostream& os, Directions d) { return output_around_n(os, d, 5); }
@@ -647,8 +645,6 @@ namespace LongEffect
     Effect24::init();
   }
 
-} // namespace Effect8
-} // namespace YaneuraOu {
-
+}
 
 #endif // LONG_EFFECT_LIBRARY

@@ -1,5 +1,5 @@
-﻿#ifndef LEARNING_TOOLS_H_INCLUDED
-#define LEARNING_TOOLS_H_INCLUDED
+﻿#ifndef __LEARN_WEIGHT_H__
+#define __LEARN_WEIGHT_H__
 
 // 評価関数の機械学習のときに用いる重み配列などに関する機械学習用ツール類一式
 
@@ -13,9 +13,8 @@
 
 #include <cmath>	// std::sqrt()
 
-namespace YaneuraOu {
-namespace EvalLearningTools {
-
+namespace EvalLearningTools
+{
 	// -------------------------------------------------
 	//                     初期化
 	// -------------------------------------------------
@@ -1014,8 +1013,8 @@ namespace EvalLearningTools {
 		return os;
 	}
 
-} // namespace EvalLearningTools {
-} // namespace YaneuraOu {
+
+}
 
 #endif // defined (EVAL_LEARN)
-#endif // LEARNING_TOOLS_H_INCLUDED
+#endif

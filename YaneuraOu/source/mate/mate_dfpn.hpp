@@ -1,5 +1,4 @@
-﻿// ⚠ このファイルは、mate.cppからincludeするので、変なnamespaceに入れてはならない。
-
+﻿#include "mate.h"
 #if defined(USE_MATE_DFPN)
 
 /*
@@ -43,8 +42,6 @@
 #include "../position.h"
 #include "../thread.h"
 #include "mate_move_picker.h"
-
-namespace YaneuraOu {
 
 #if defined (DFPN64)
 // Node数が64bitで表現できる数まで扱える版
@@ -102,7 +99,7 @@ namespace Mate::Dfpn64
 		template <bool or_node>
 		void init(ExtMove m)
 		{
-			lastMove = m;
+			lastMove = m.move;
 
 			if (MoveOrdering)
 			{
@@ -232,7 +229,7 @@ namespace Mate::Dfpn32
 		template <bool or_node>
 		void init(ExtMove m)
 		{
-			lastMove = m.to_u32();
+			lastMove = m.move;
 
 			if (MoveOrdering)
 			{
@@ -254,7 +251,7 @@ namespace Mate::Dfpn32
 		template <bool or_node>
 		void init_mate_move(Move move ,int ply = 0)
 		{
-			this->lastMove = move.to_u32();
+			this->lastMove = move;
 			this->template set_mate<true>(ply);
 
 			// これはnullptrを意味する。
@@ -297,8 +294,6 @@ namespace Mate::Dfpn32
 	};
 
 #endif // defined (DFPN32)
-
-	// 以下、DFPN64,DFPN32の共通コード
 
 	// ===================================
 	// 子ノード、ノードのメモリマネージャー
@@ -485,7 +480,7 @@ namespace Mate::Dfpn32
 
 			nodes_searched = 0;
 			this->nodes_limit = (NodeCountType)nodes_limit;
-			bestmove = Move::none();
+			bestmove = MOVE_NONE;
 
 			// カウンターのリセットをしておかないと新しいメモリが使えない。
 			node_manager.reset_counter();
@@ -512,11 +507,11 @@ namespace Mate::Dfpn32
 
 			// 不詰が証明された
 			if (current_root->pn >= NodeType::DNPN_MATE && current_root->dn == 0)
-				return Move::null();
+				return MOVE_NULL;
 
 			// 制限ノード数では解けなかった。
 			// もしくはout of memory
-			return Move::none();
+			return MOVE_NONE;
 		}
 
 		// mate_dfpn()がMOVE_NULL,MOVE_NONE以外を返した場合にその手順を取得する。
@@ -566,7 +561,7 @@ namespace Mate::Dfpn32
 				// ただしorノードではdnは最小であってほしい。(これが詰みまでの距離を表現しているので)
 				// andノードではdnは最大であってほしい。
 				Move move = or_node ? pick_the_best<true,proof,current>(node) : pick_the_best<false,proof,current>(node);
-				if (move == Move::none())
+				if (move == MOVE_NONE)
 					break;
 
 				pv.push_back(move);
@@ -575,7 +570,7 @@ namespace Mate::Dfpn32
 			return pv;
 		}
 
-		// 解図できたとき(mate_dfpn()を呼び出してMove::none()以外が返ってきた時に)
+		// 解図できたとき(mate_dfpn()を呼び出してMOVE_NONE以外が返ってきた時に)
 		// あるノードでベストな指し手を得る。
 		//  or_node : nodeは、開始局面とその2手先、4手先、…の局面であるか。
 		//  proof   : 詰みの時のPVがほしい時。これをfalseにすると、不詰が証明されている時に、そのなかの長そうなpvが得られる。
@@ -588,7 +583,7 @@ namespace Mate::Dfpn32
 			if ( children == nullptr || node->child_num == 0)
 			{
 				node = nullptr;
-				return Move::none(); // これ以上辿れない
+				return MOVE_NONE; // これ以上辿れない
 			}
 
 			// 子ノードの数
@@ -713,7 +708,7 @@ namespace Mate::Dfpn32
 				 // pnはMoveOrdering有りだと 2**16 されていることに注意。
 				 // 残り探索ノード数がpnを上回ると証明不可。不詰は証明できるかもしれないが、不詰の証明はあまり価値がないのでこの状況下ならできなくていいと思う。
 				 // ↑この枝刈りは、やねうらお考案。leaf nodeから呼び出すときに3%ぐらいnps上がる。
-				 && !stop // スレッド停止命令が来たら即座に終了する。
+				 && !Threads.stop // スレッド停止命令が来たら即座に終了する。
 				)
 			{
 #if 0
@@ -736,9 +731,7 @@ namespace Mate::Dfpn32
 
 				// 一手進めて子ノードに行く
 				StateInfo si;
-				Move m = pos.to_move(Move16(u16(u32(best_child->lastMove))));
-				// ⇨ ここ、lastMoveがu32かMove型なので、Move16にしたいのだが、この変換が一発で書けない。
-
+				Move m = pos.to_move(best_child->lastMove);
 				pos.do_move(m, si);
 
 				// 再帰的に呼び出す。
@@ -752,8 +745,8 @@ namespace Mate::Dfpn32
 				// 千日手が絡まずに詰み or 不詰を証明したので、置換表に保存する。
 				if (WithHash && (node->dn == 0 || node->pn == 0) && !node->repeated)
 				{
-					Key key = pos.state()->board_key;
-					auto entry = hash_table->first_entry(key, pos.side_to_move());
+					auto key = pos.state()->board_key();
+					auto entry = hash_table->first_entry(key);
 
 					// たぶん指し手mでこれを証明したはずなので、これを登録しておく。
 					bool is_mate = node->pn == 0; /* pn == 0はわかったから、その手数(== DNPN_INF - dn)を保存したい */
@@ -990,8 +983,8 @@ namespace Mate::Dfpn32
 			{
 				// 置換表に登録されていれば、その結論を用いる。
 
-				Key key = pos.state()->board_key;
-				auto entry = hash_table->first_entry(key, pos.side_to_move());
+				auto key = pos.state()->board_key();
+				auto entry = hash_table->first_entry(key);
 
 				// 置換表の値で証明されたか？
 				bool proven = false;
@@ -1146,7 +1139,7 @@ namespace Mate::Dfpn32
 			if (or_node && !pos.in_check())
 			{
 				Move mate_move = Mate::mate_1ply(pos);
-				if (mate_move != Move::none())
+				if (mate_move != MOVE_NONE)
 				{
 					// 詰んだ
 					NodeType* child = new_node(1);
@@ -1257,6 +1250,4 @@ namespace Mate::Dfpn32
 
 #endif //defined(DFPN64) || defined(DFPN32)
 
-} // namespace YaneuraOu
-
-#endif // defined(USE_MATE_DFPN)
+#endif // defined(USE_DFPN)

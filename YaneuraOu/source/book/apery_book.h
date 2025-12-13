@@ -26,34 +26,35 @@
 #include "../types.h"
 #include "../position.h"
 
-namespace YaneuraOu {
 namespace Book {
 
-struct AperyBookEntry {
-	uint64_t key;
-	uint16_t fromToPro;
-	uint16_t count;
-	int32_t score;
-};
+	using Key = uint64_t;
+	using Score = int;
 
-class AperyBook {
-public:
-	explicit AperyBook(const std::string& filename);
-	const std::vector<AperyBookEntry>& get_entries(const Position& pos) const;
-	static Key bookKey(const Position& pos);
-	size_t size() const { return book_.size(); }
-	static void init();
+	struct AperyBookEntry {
+		Key key;
+		uint16_t fromToPro;
+		uint16_t count;
+		Score score;
+	};
 
-private:
-	std::vector<AperyBookEntry> empty_entries_;
-	std::unordered_map<Key, std::vector<AperyBookEntry>> book_;
+	class AperyBook {
+	public:
+		explicit AperyBook(const std::string& filename);
+		const std::vector<AperyBookEntry>& get_entries(const Position& pos) const;
+		static Key bookKey(const Position& pos);
+		size_t size() const { return book_.size(); }
+		static void init();
 
-	static Key ZobPiece[PIECE_NB - 1][SQ_NB];
-	static Key ZobHand[PIECE_HAND_NB - 1][19];
-	static Key ZobTurn;
-};
+	private:
+		std::vector<AperyBookEntry> empty_entries_;
+		std::unordered_map<Key, std::vector<AperyBookEntry>> book_;
 
-} // namespace Book
-} // namespace YaneuraOu
+		static Key ZobPiece[PIECE_NB - 1][SQ_NB];
+		static Key ZobHand[PIECE_HAND_NB - 1][19];
+		static Key ZobTurn;
+	};
+
+}
 
 #endif // #ifndef APERY_BOOK_HPP

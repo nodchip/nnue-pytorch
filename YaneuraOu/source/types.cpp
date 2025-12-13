@@ -3,14 +3,11 @@
 #include "search.h"
 #include "tt.h"
 
-namespace YaneuraOu {
-
 // ----------------------------------------
 //    const
 // ----------------------------------------
 
 const char* USI_PIECE = ". P L N S B R G K +P+L+N+S+B+R+G+.p l n s b r g k +p+l+n+s+b+r+g+k";
-const std::string StartSFEN = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1";
 
 // ----------------------------------------
 //    tables
@@ -32,22 +29,22 @@ std::string pretty(Rank r) { return pretty_jp ? std::string("一二三四五六�
 
 std::string pretty(Move m)
 {
-	if (m.is_drop())
-		return pretty(m.to_sq()  ) + pretty2(Piece(m.from_sq())) + (pretty_jp ? "打" : "*");
+	if (is_drop(m))
+		return pretty(to_sq(m)  ) + pretty2(Piece(from_sq(m))) + (pretty_jp ? "打" : "*");
 	else
-		return pretty(m.from_sq()) + pretty(m.to_sq())           + (m.is_promote() ? (pretty_jp ? "成" : "+") : "");
+		return pretty(from_sq(m)) + pretty(to_sq(m))           + (is_promote(m) ? (pretty_jp ? "成" : "+") : "");
 }
 
 std::string pretty(Move m, Piece movedPieceType)
 {
-	if (m.is_drop())
-		return pretty(m.to_sq()) + pretty2(movedPieceType) + (pretty_jp ? "打" : "*");
+	if (is_drop(m))
+		return pretty(to_sq(m)) + pretty2(movedPieceType) + (pretty_jp ? "打" : "*");
 	else
-		return pretty(m.to_sq()) + pretty2(movedPieceType) + (m.is_promote() ? (pretty_jp ? "成" : "+") : "") + "[" + pretty(m.from_sq()) + "]";
+		return pretty(to_sq(m)) + pretty2(movedPieceType) + (is_promote(m) ? (pretty_jp ? "成" : "+") : "") + "[" + pretty(from_sq(m)) + "]";
 }
 
-std::string to_usi_string(Move   m){ return USIEngine::move(m); }
-std::string to_usi_string(Move16 m){ return USIEngine::move(m); }
+std::string to_usi_string(Move   m){ return USI::move(m); }
+std::string to_usi_string(Move16 m){ return USI::move(m); }
 
 std::ostream& operator<<(std::ostream& os, Color c) { os << ((c == BLACK) ? (pretty_jp ? "先手" : "BLACK") : (pretty_jp ? "後手" : "WHITE")); return os; }
 
@@ -104,20 +101,46 @@ std::ostream& operator<<(std::ostream& os, RepetitionState rs)
 // 探索用のglobalな変数
 // ----------------------------------------
 
-// エンジンオプションの入玉ルールに関する文字列
-std::vector<std::string> EKR_STRINGS = {"NoEnteringKing", "CSARule24", "CSARule24H", "CSARule27",
-                                        "CSARule27H",     "TryRule" /* , "EKR_NULL"*/};
+namespace Search {
+	LimitsType Limits;
 
-// 文字列に対応するEnteringKingRuleを取得する。
-EnteringKingRule to_entering_king_rule(const std::string& rule) {
-    for (size_t i = 0; i < EKR_STRINGS.size(); ++i)
-        if (EKR_STRINGS[i] == rule)
-            return (EnteringKingRule) i;
+	// 探索を抜ける前にponderの指し手がないとき(rootでfail highしているだとか)にこの関数を呼び出す。
+	// ponderの指し手として何かを指定したほうが、その分、相手の手番において考えられて得なので。
 
-    ASSERT(false);
-    return EnteringKingRule::EKR_NONE;
+	bool RootMove::extract_ponder_from_tt(Position& pos, Move ponder_candidate)
+	{
+		StateInfo st;
+		bool ttHit;
+
+		//    ASSERT_LV3(pv.size() == 1);
+
+		// 詰みの局面が"ponderhit"で返ってくることがあるので、ここでのpv[0] == MOVE_RESIGNであることがありうる。
+		if (!is_ok(pv[0]))
+			return false;
+
+		pos.do_move(pv[0], st, pos.gives_check(pv[0]));
+		TTEntry* tte = TT.read_probe(pos.state()->hash_key(), ttHit);
+		Move m;
+		if (ttHit)
+		{
+			m = pos.to_move(tte->move()); // SMP safeにするためlocal copy
+			if (MoveList<LEGAL_ALL>(pos).contains(m))
+				goto FOUND;
+		}
+		// 置換表にもなかったので以前のiteration時のpv[1]をほじくり返す。
+		m = ponder_candidate;
+		if (MoveList<LEGAL_ALL>(pos).contains(m))
+			goto FOUND;
+
+		pos.undo_move(pv[0]);
+		return false;
+	FOUND:;
+		pos.undo_move(pv[0]);
+		pv.push_back(m);
+		//    std::cout << m << std::endl;
+		return true;
+	}
 }
-
 
 // 引き分け時のスコア(とそのdefault値)
 Value drawValueTable[REPETITION_NB][COLOR_NB] =
@@ -130,10 +153,6 @@ Value drawValueTable[REPETITION_NB][COLOR_NB] =
 	{ -VALUE_SUPERIOR    , -VALUE_SUPERIOR    }, // REPETITION_INFERIOR
 };
 
-Move Move::from_string(const Position& pos, const std::string usi_move) { return USIEngine::to_move(pos, usi_move); }
-
-Move16 Move::to_move16() const { return Move16(data); }
-Move16 Move16::from_string(const std::string usi_move) { return USIEngine::to_move16(usi_move); }
-
-
-} // namespace YaneuraOu
+#if defined(USE_GLOBAL_OPTIONS)
+GlobalOptions_ GlobalOptions;
+#endif

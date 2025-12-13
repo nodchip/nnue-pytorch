@@ -26,23 +26,19 @@
 #include <cstdint>
 #include <random>
 
-namespace YaneuraOu {
-
 namespace {
-
-// 64bit のランダムな値を返す為のクラス
-class MT64bit : public std::mt19937_64 {
-public:
-    MT64bit() : std::mt19937_64() {}
-    explicit MT64bit(const unsigned int seed) : std::mt19937_64(seed) {}
-    uint64_t random() {
-        return (*this)();
-    }
-    uint64_t randomFewBits() {
-        return random() & random() & random();
-    }
-};
-
+    // 64bit のランダムな値を返す為のクラス
+    class MT64bit : public std::mt19937_64 {
+    public:
+        MT64bit() : std::mt19937_64() {}
+        explicit MT64bit(const unsigned int seed) : std::mt19937_64(seed) {}
+        uint64_t random() {
+            return (*this)();
+        }
+        uint64_t randomFewBits() {
+            return random() & random() & random();
+        }
+    };
 }
 
 namespace Book {
@@ -104,5 +100,4 @@ const std::vector<AperyBookEntry>& AperyBook::get_entries(const Position& pos) c
     return it->second;
 }
 
-} // namespace Book
-} // namespace YaneuraOu
+}

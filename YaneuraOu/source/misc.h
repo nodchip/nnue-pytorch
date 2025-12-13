@@ -1,17 +1,9 @@
 ﻿#ifndef MISC_H_INCLUDED
 #define MISC_H_INCLUDED
 
-//#include <chrono>
-#include <exception>  // IWYU pragma: keep
-// IWYU pragma: no_include <__exception/terminate.h>
+#include <chrono>
+#include <vector>
 #include <functional>
-#include <optional>
-#include <cstring>
-#include <memory>
-//#include <string>
-#include <string_view>
-//#include <vector>
-
 #include <fstream>
 #include <mutex>
 #include <atomic>
@@ -22,41 +14,18 @@
 
 #include "types.h"
 
-namespace YaneuraOu {
-
-class OptionsMap;
-class Engine;
-
 // --------------------
-//     engine info
+//  engine info
 // --------------------
-
-// エンジンのバージョン情報を返す。
-std::string engine_version_info();
 
 // "USI"コマンドに応答するために表示する。
-//
-//  to_usi : これがtrueのときは、"usi"コマンドに対する応答として呼び出されたという意味。
-//           これがfalseのときは、起動直後の出力用。
-//        	 ⚠ やねうら王ではMultiEngineを採用しており、
-//			 起動直後ではエンジン名が確定しないから出力できない。
-// 
-// 🤔 やねうら王では、以下のように変更する。
-// engine_name    : エンジン名
-// engine_author  : エンジンの作者名
-// engine_version : エンジンのバージョン
-// eval_name      : 評価関数名
-std::string engine_info(const std::string& engine_name,
-						const std::string& engine_author,
-                        const std::string& engine_version,
-                        const std::string& eval_name);
+const std::string engine_info();
 
 // 使用したコンパイラについての文字列を返す。
-std::string compiler_info();
+const std::string compiler_info();
 
 // config.hで設定した値などについて出力する。
-std::string config_info();
-
+const std::string config_info();
 
 // --------------------
 //    prefetch命令
@@ -65,7 +34,7 @@ std::string config_info();
 // prefetch()は、与えられたアドレスの内容をL1/L2 cacheに事前に読み込む。
 // これはnon-blocking関数で、CPUがメモリに読み込むのを待たない。
 
-void prefetch(const void* addr);
+void prefetch(void* addr);
 
 // --------------------
 //  logger
@@ -73,6 +42,51 @@ void prefetch(const void* addr);
 
 // cin/coutへの入出力をファイルにリダイレクトを開始/終了する。
 void start_logger(const std::string& fname);
+
+// --------------------
+//  Large Page確保
+// --------------------
+
+// Large Pageを確保するwrapper class。
+// WindowsのLarge Pageを確保する。
+// Large Pageを用いるとメモリアクセスが速くなるらしい。
+// 置換表用のメモリなどはこれで確保する。
+// cf. やねうら王、Large Page対応で10数%速くなった件 : http://yaneuraou.yaneu.com/2020/05/31/%e3%82%84%e3%81%ad%e3%81%86%e3%82%89%e7%8e%8b%e3%80%81large-page%e5%af%be%e5%bf%9c%e3%81%a710%e6%95%b0%e9%80%9f%e3%81%8f%e3%81%aa%e3%81%a3%e3%81%9f%e4%bb%b6/
+//
+// Stockfishでは、Large Pageの確保～開放のためにaligned_ttmem_alloc(),aligned_ttmem_free()という関数が実装されている。
+// コードの簡単化のために、やねうら王では独自に本classからそれらを用いる。
+struct LargeMemory
+{
+	// LargePage上のメモリを確保する。Large Pageに確保できるなら、そこにする。
+	// aligned_ttmem_alloc()を内部的に呼び出すので、アドレスは少なくとも2MBでalignされていることは保証されるが、
+	// 気になる人のためにalignmentを明示的に指定できるようになっている。
+	// メモリ確保に失敗するか、引数のalignで指定したalignmentになっていなければ、
+	// エラーメッセージを出力してプログラムを終了させる。
+	// size       : 確保するサイズ [byte]
+	// align      : 返されるメモリが守るべきalignment
+	// zero_clear : trueならゼロクリアされたメモリ領域を返す。
+	void* alloc(size_t size, size_t align = 256 , bool zero_clear = false);
+
+	// alloc()で確保したメモリを開放する。
+	// このクラスのデストラクタからも自動でこの関数が呼び出されるので明示的に呼び出す必要はない(かも)
+	void free();
+
+	// alloc()が呼び出されてメモリが確保されている状態か？
+	bool alloced() const { return ptr != nullptr; }
+
+	// alloc()のstatic関数版。この関数で確保したメモリはstatic_free()で開放する。
+	static void* static_alloc(size_t size, size_t align = 256, bool zero_clear = false);
+
+	// static_alloc()で確保したメモリを開放する。
+	static void static_free(void* mem);
+
+	~LargeMemory() { free(); }
+
+private:
+	// allocで確保されたメモリの先頭アドレス
+	// (free()で開放するときにこのアドレスを用いる)
+	void* ptr = nullptr;
+};
 
 // --------------------
 //  統計情報
@@ -92,201 +106,125 @@ void dbg_mean_of(int v);
 // このとき、以下の関数を呼び出すと、その統計情報をcerrに出力する。
 void dbg_print();
 
+// RunningAverage : a class to calculate a running average of a series of values.
+// For efficiency, all computations are done with integers.
+//
+// 置換表のhit率などを集計するためのクラス。
+// ttHitAverageとして、Threadクラスが持っている。
+//
+// cf. Detect search explosions : https://github.com/official-stockfish/Stockfish/commit/73018a03375b4b72ee482eb5a4a2152d7e4f0aac
+// →　二重の探索延長によって組合せ爆発が生じてiterationが進みにくくなるのを回避する狙い。
+//
+class RunningAverage {
+public:
+
+	// Reset the running average to rational value p / q
+	void set(int64_t p, int64_t q)
+	{
+		average = p * PERIOD * RESOLUTION / q;
+	}
+
+	// Update average with value v
+	//
+	// これは、ttHit(置換表にhitしたかのフラグ)の実行時の平均を近似するために用いられる。
+	// 移動平均を算出している。
+	void update(int64_t v)
+	{
+		average = RESOLUTION * v + (PERIOD - 1) * average / PERIOD;
+	}
+
+	// Test if average is strictly greater than rational a / b
+	bool is_greater(int64_t a, int64_t b)
+	{
+		return b * average > a * (PERIOD * RESOLUTION);
+	}
+
+	int64_t value() const
+	{
+		return average / (PERIOD * RESOLUTION);
+	}
+
+private:
+	static constexpr int64_t PERIOD = 4096;
+	static constexpr int64_t RESOLUTION = 1024;
+	int64_t average;
+};
+
+//
+// 探索でtrendと楽観値の計算で用いるsigmoid関数。
+// →　やねうら王では使っていない。
+//
+/// sigmoid(t, x0, y0, C, P, Q) implements a sigmoid-like function using only integers,
+/// with the following properties:
+///
+///  -  sigmoid is centered in (x0, y0)
+///  -  sigmoid has amplitude [-P/Q , P/Q] instead of [-1 , +1]
+///  -  limit is (y0 - P/Q) when t tends to -infinity
+///  -  limit is (y0 + P/Q) when t tends to +infinity
+///  -  the slope can be adjusted using C > 0, smaller C giving a steeper sigmoid
+///  -  the slope of the sigmoid when t = x0 is P/(Q*C)
+///  -  sigmoid is increasing with t when P > 0 and Q > 0
+///  -  to get a decreasing sigmoid, change sign of P
+///  -  mean value of the sigmoid is y0
+///
+/// Use <https://www.desmos.com/calculator/jhh83sqq92> to draw the sigmoid
+
+inline int64_t sigmoid(int64_t t, int64_t x0,
+	int64_t y0,
+	int64_t  C,
+	int64_t  P,
+	int64_t  Q)
+{
+	ASSERT_LV3(C > 0);
+	ASSERT_LV3(Q != 0);
+	return y0 + P * (t - x0) / (Q * (std::abs(t - x0) + C));
+}
+
 // --------------------
 //  Time[ms] wrapper
 // --------------------
 
-#if STOCKFISH
 // ms単位での時間計測しか必要ないのでこれをTimePoint型のように扱う。
-// TimePointの定義。💡 やねうら王では、types.hに移動。
-//using TimePoint = std::chrono::milliseconds::rep;  // A value in milliseconds
-//static_assert(sizeof(TimePoint) == sizeof(int64_t), "TimePoint should be 64 bits");
-#endif
-
+typedef std::chrono::milliseconds::rep TimePoint;
+static_assert(sizeof(TimePoint) == sizeof(int64_t), "TimePoint should be 64 bits");
 
 // ms単位で現在時刻を返す
 static TimePoint now() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
-    //(std::chrono::steady_clock::now().time_since_epoch()).count() * 10;
-    // 💡 10倍早く時間が経過するようにして、持ち時間制御のテストなどを行う時は↑このように10をかけ算する。
+	return std::chrono::duration_cast<std::chrono::milliseconds>
+		(std::chrono::steady_clock::now().time_since_epoch()).count();
+		//(std::chrono::steady_clock::now().time_since_epoch()).count() * 10;
+		// 10倍早く時間が経過するようにして、持ち時間制御のテストなどを行う。
 }
 
-#if STOCKFISH
+// --------------------
+//    HashTable
+// --------------------
 
-#else
-// 🌈 時間計測用。経過時間を計測する。
-struct ElapsedTimer {
-    ElapsedTimer();
+// このclass、Stockfishにあるんだけど、
+// EvalHashとしてLargePageを用いる同等のclassをすでに用意しているので、使わない。
 
-    // startTimeを引数sで初期化する。
-    ElapsedTimer(TimePoint s);
-
-    // タイマーを初期化する。以降、elapsed()でinit()してからの経過時間が得られる。
-    void reset();
-    // TimePointを指定して初期化する。この時刻からの経過時間が求められるようになる。
-    void reset(TimePoint s);
-
-    // resetしてからの経過時間。
-    TimePoint elapsed() const;
-
-   private:
-    // reset()された時刻。
-    TimePoint startTime;
-};
-
-#endif
+//template<class Entry, int Size>
+//struct HashTable {
+//	Entry* operator[](Key key) { return &table[(uint32_t)key & (Size - 1)]; }
+//
+//private:
+//	std::vector<Entry> table = std::vector<Entry>(Size);
+//};
 
 // --------------------
 //  sync_out/sync_endl
 // --------------------
-
-// Used to serialize access to std::cout
-// to avoid multiple threads writing at the same time.
 
 // スレッド排他しながらcoutに出力するために使う。
 // 例)
 // sync_out << "bestmove " << m << sync_endl;
 // のように用いる。
 
-enum SyncCout {
-	IO_LOCK,
-	IO_UNLOCK
-};
+enum SyncCout { IO_LOCK, IO_UNLOCK };
 std::ostream& operator<<(std::ostream&, SyncCout);
 
 #define sync_cout std::cout << IO_LOCK
 #define sync_endl std::endl << IO_UNLOCK
-
-// sync_cout / sync_endlと同等のlock～unlock。
-void sync_cout_start();
-void sync_cout_end();
-
-// --------------------
-//      ValueList
-// --------------------
-
-//  最大サイズが固定長のvectorみたいなやつ。
-template<typename T, std::size_t MaxSize>
-class ValueList {
-
-public:
-	std::size_t size() const { return size_; }
-    void        push_back(const T& value) {
-        assert(size_ < MaxSize);
-        values_[size_++] = value;
-    }
-	const T* begin() const { return values_; }
-	const T* end() const { return values_ + size_; }
-
-	const T& operator[](int index) const { return values_[index]; }
-	// ⇨ ここの引数、どうせ大きな配列は確保しないのでsize_tではなくintで良い。
-
-	// 非const版の begin/end(やねうら王独自追加)
-	T* begin() { return values_; }
-	T* end()   { return values_ + size_; }
-
-private:
-	T           values_[MaxSize];
-	std::size_t size_ = 0;
-};
-
-// --------------------
-//      MultiArray
-// --------------------
-
-template<typename T, std::size_t Size, std::size_t... Sizes>
-class MultiArray;
-
-namespace Detail {
-
-	template<typename T, std::size_t Size, std::size_t... Sizes>
-	struct MultiArrayHelper {
-		using ChildType = MultiArray<T, Sizes...>;
-	};
-
-	template<typename T, std::size_t Size>
-	struct MultiArrayHelper<T, Size> {
-		using ChildType = T;
-	};
-
-	template<typename To, typename From>
-	constexpr bool is_strictly_assignable_v =
-		std::is_assignable_v<To&, From> && (std::is_same_v<To, From> || !std::is_convertible_v<From, To>);
-
-}
-
-// MultiArray is a generic N-dimensional array.
-// The template parameters (Size and Sizes) encode the dimensions of the array.
-
-// MultiArray は汎用的な N 次元配列です。
-// テンプレートパラメータ (Size と Sizes) が配列の次元を表します。
-
-template<typename T, std::size_t Size, std::size_t... Sizes>
-class MultiArray {
-	using ChildType = typename Detail::MultiArrayHelper<T, Size, Sizes...>::ChildType;
-	using ArrayType = std::array<ChildType, Size>;
-	ArrayType data_;
-
-public:
-	using value_type = typename ArrayType::value_type;
-	using size_type = typename ArrayType::size_type;
-	using difference_type = typename ArrayType::difference_type;
-	using reference = typename ArrayType::reference;
-	using const_reference = typename ArrayType::const_reference;
-	using pointer = typename ArrayType::pointer;
-	using const_pointer = typename ArrayType::const_pointer;
-	using iterator = typename ArrayType::iterator;
-	using const_iterator = typename ArrayType::const_iterator;
-	using reverse_iterator = typename ArrayType::reverse_iterator;
-	using const_reverse_iterator = typename ArrayType::const_reverse_iterator;
-
-	constexpr auto& at(size_type index) noexcept { return data_.at(index); }
-	constexpr const auto& at(size_type index) const noexcept { return data_.at(index); }
-
-	constexpr auto& operator[](size_type index) noexcept { return data_[index]; }
-	constexpr const auto& operator[](size_type index) const noexcept { return data_[index]; }
-
-	constexpr auto& front() noexcept { return data_.front(); }
-	constexpr const auto& front() const noexcept { return data_.front(); }
-	constexpr auto& back() noexcept { return data_.back(); }
-	constexpr const auto& back() const noexcept { return data_.back(); }
-
-	auto* data() { return data_.data(); }
-	const auto* data() const { return data_.data(); }
-
-	constexpr auto begin() noexcept { return data_.begin(); }
-	constexpr auto end() noexcept { return data_.end(); }
-	constexpr auto begin() const noexcept { return data_.begin(); }
-	constexpr auto end() const noexcept { return data_.end(); }
-	constexpr auto cbegin() const noexcept { return data_.cbegin(); }
-	constexpr auto cend() const noexcept { return data_.cend(); }
-
-	constexpr auto rbegin() noexcept { return data_.rbegin(); }
-	constexpr auto rend() noexcept { return data_.rend(); }
-	constexpr auto rbegin() const noexcept { return data_.rbegin(); }
-	constexpr auto rend() const noexcept { return data_.rend(); }
-	constexpr auto crbegin() const noexcept { return data_.crbegin(); }
-	constexpr auto crend() const noexcept { return data_.crend(); }
-
-	constexpr bool      empty() const noexcept { return data_.empty(); }
-	constexpr size_type size() const noexcept { return data_.size(); }
-	constexpr size_type max_size() const noexcept { return data_.max_size(); }
-
-	template<typename U>
-	void fill(const U& v) {
-		static_assert(Detail::is_strictly_assignable_v<T, U>,
-			"Cannot assign fill value to entry type");
-		for (auto& ele : data_)
-		{
-			if constexpr (sizeof...(Sizes) == 0)
-				ele = v;
-			else
-				ele.fill(v);
-		}
-	}
-
-	constexpr void swap(MultiArray<T, Size, Sizes...>& other) noexcept { data_.swap(other.data_); }
-};
 
 // --------------------
 //       乱数
@@ -307,10 +245,7 @@ struct PRNG
 
 		// time値とか、thisとか色々加算しておく。
 		s = (u64)(time(NULL)) + ((u64)(this) << 32)
-		//	+ (u64)(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-		// ⇨ MSYS2 + clang18でhigh_resolution_clock::now()を使うとセグフォで落ちるようになった。
-		//   代わりにsteady_clockを用いる。
-			+ (u64)std::chrono::steady_clock::now().time_since_epoch().count();
+			+ (u64)(std::chrono::high_resolution_clock::now().time_since_epoch().count());
 	}
 
 	// 乱数を一つ取り出す。
@@ -343,247 +278,131 @@ static std::ostream& operator<<(std::ostream& os, PRNG& prng)
 
 inline uint64_t mul_hi64(uint64_t a, uint64_t b) {
 #if defined(__GNUC__) && defined(IS_64BIT)
-    __extension__ using uint128 = unsigned __int128;
-    return (uint128(a) * uint128(b)) >> 64;
+	__extension__ typedef unsigned __int128 uint128;
+	return ((uint128)a * (uint128)b) >> 64;
 #else
 	// 64bit同士の掛け算を64bitを32bit 2つに分割して、筆算のようなことをするコード
-    uint64_t aL = uint32_t(a), aH = a >> 32;
-    uint64_t bL = uint32_t(b), bH = b >> 32;
-    uint64_t c1 = (aL * bL) >> 32;
-    uint64_t c2 = aH * bL + c1;
-    uint64_t c3 = aL * bH + uint32_t(c2);
-    return aH * bH + (c2 >> 32) + (c3 >> 32);
+	uint64_t aL = (uint32_t)a, aH = a >> 32;
+	uint64_t bL = (uint32_t)b, bH = b >> 32;
+	uint64_t c1 = (aL * bL) >> 32;
+	uint64_t c2 = aH * bL + c1;
+	uint64_t c3 = aL * bH + (uint32_t)c2;
+	return aH * bH + (c2 >> 32) + (c3 >> 32);
 #endif
 }
 
 // --------------------
-//   hash値の計算
+//  全プロセッサを使う
 // --------------------
 
-// 📓 SFNNのバイナリに対してhash値を計算するためのヘルパー関数群。
+// Windows環境において、プロセスが1個の論理プロセッサグループを超えてスレッドを
+// 実行するのは不可能である。これは、最大64コアまでの使用に制限されていることを普通、意味する。
+// これを克服するためには、いくつかの特殊なプラットフォーム固有のAPIを呼び出して、
+// それぞのスレッドがgroup affinityを設定しなければならない。
+// 元のコードはPeter ÖsterlundによるTexelから。
 
-// 2つのハッシュ値を安全に合成するためのユーティリティ。
-// seed と v を合成した値を seed に返す。
-// 📝 vのほうはT型としてstd::hash<T>を利用する。
-template<typename T>
-inline void hash_combine(std::size_t& seed, const T& v) {
-    std::hash<T> hasher;
-    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+namespace WinProcGroup {
+	// 各スレッドがidle_loop()などで自分のスレッド番号(0～)を渡す。
+	// 1つ目のプロセッサをまず使い切るようにgroup affinityを割り当てる。
+	// 1つ目のプロセッサの論理コアを使い切ったら次は2つ目のプロセッサを使っていくような動作。
+	void bindThisThread(size_t idx);
 }
 
-// hash_combine の std::size_t 特化版
-// 📝 std::hash<std::size_t> は単なる値返しであることが多く、
-//     特化させることで不要な hasher オブジェクト生成を削減し、
-//     わずかだがパフォーマンス改善になる。
-template<>
-inline void hash_combine(std::size_t& seed, const std::size_t& v) {
-    seed ^= v + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
+// -----------------------
+//  探索のときに使う時間管理用
+// -----------------------
 
-// 任意の POD ライクなデータ構造を、バイト列そのままのハッシュとして利用し、size_tで返す。
-// 📝 `reinterpret_cast` でメモリ内容を生のまま string_view にして hash を取る。
-//     その実装はコンパイラ依存かつendian依存。
-template<typename T>
-inline std::size_t get_raw_data_hash(const T& value) {
-    return std::hash<std::string_view>{}(
-      std::string_view(reinterpret_cast<const char*>(&value), sizeof(value)));
-}
+namespace Search { struct LimitsType; }
 
-/*
-	FixedString
+struct Timer
+{
+	// タイマーを初期化する。以降、elapsed()でinit()してからの経過時間が得られる。
+	void reset() { startTime = startTimeFromPonderhit = now(); }
 
-	固定長バッファ上で動作する軽量文字列。
-	std::string のような動的メモリアロケーションを一切行わず、
-	組み込み用途やパフォーマンス重視のコードで有用。
-	💡 StringBuilder やログバッファ用途に近い。
+	// "ponderhit"からの時刻を計測する用
+	void reset_for_ponderhit() { startTimeFromPonderhit = now(); }
 
-    特徴:
-     - Capacity をコンパイル時に決める
-     - オーバーフロー時は std::terminate() で即死（安全優先）
-     - '\0' 終端を保持しており C 文字列互換
-     - std::string / std::string_view への暗黙変換あり
-*/
+	// 探索開始からの経過時間。単位は[ms]
+	// 探索node数に縛りがある場合、elapsed()で探索node数が返ってくる仕様にすることにより、一元管理できる。
+	TimePoint elapsed() const;
 
-// Capacity : 最大文字列長(byte)
-template<std::size_t Capacity>
-class FixedString {
-   public:
+	// reset_for_ponderhit()からの経過時間。その関数は"ponderhit"したときに呼び出される。
+	// reset_for_ponderhit()が呼び出されていないときは、reset()からの経過時間。その関数は"go"コマンドでの探索開始時に呼び出される。
+	TimePoint elapsed_from_ponderhit() const;
 
-	// 空のFixedStringを構築する。
-    FixedString() :
-        length_(0) {
-        data_[0] = '\0';
-    }
+	// reset()されてからreset_for_ponderhit()までの時間
+	TimePoint elapsed_from_start_to_ponderhit() const { return (TimePoint)(startTimeFromPonderhit - startTime); }
 
-	// char* から FixedStringを構築する。
-	// ⚠ Capacityを超えた場合は、即座にstd::terminate()を呼び出す。
-    FixedString(const char* str) {
-        size_t len = std::strlen(str);
-        if (len > Capacity)
-            std::terminate();
-        std::memcpy(data_, str, len);
-        length_        = len;
-        data_[length_] = '\0';
-    }
+#if 0
+	// 探索node数を経過時間の代わりに使う。(こうするとタイマーに左右されない思考が出来るので、思考に再現性を持たせることが出来る)
+	// node数を指定して探索するとき、探索できる残りnode数。
+	// ※　StockfishでここintになっているのはTimePointにするのが正しいと思う。[2020/01/20]
+	TimePoint availableNodes;
+	// →　NetworkDelayやMinimumThinkingTimeなどの影響を考慮するのが難しく、将棋の場合、
+	// 　相性があまりよろしくないのでこの機能はやねうら王ではサポートしないことにする。
+#endif
 
-	// std::string から FixedStringを構築する。
-	// ⚠ Capacityを超えた場合は、即座にstd::terminate()を呼び出す。
-    FixedString(const std::string& str) {
-        if (str.size() > Capacity)
-            std::terminate();
-        std::memcpy(data_, str.data(), str.size());
-        length_        = str.size();
-        data_[length_] = '\0';
-    }
+	// このシンボルが定義されていると、今回の思考時間を計算する機能が有効になる。
+#if defined(USE_TIME_MANAGEMENT)
 
-	// 格納している文字列長さ
-    std::size_t size() const { return length_; }
+	// 今回の思考時間を計算して、optimum(),maximum()が値をきちんと返せるようにする。
+	// ※　ここで渡しているlimitsは、今回の探索の終わりまでなくならないものとする。
+	//    "ponderhit"でreinit()でこの変数を参照することがあるため。
+	void init(const Search::LimitsType& limits, Color us, int ply);
 
-	// template引数で渡されたCapacity
-    std::size_t capacity() const { return Capacity; }
+	// ponderhitの時に残り時間が付与されている時(USI拡張)、再度思考時間を調整するために↑のinit()相当のことを行う。
+	void reinit() { init_(*lastcall_Limits, lastcall_Us, lastcall_Ply);}
 
-	// string::c_str()みたいなの。
-    const char* c_str() const { return data_; }
-	const char* data() const { return data_; }
+	TimePoint minimum() const { return minimumTime; }
+	TimePoint optimum() const { return optimumTime; }
+	TimePoint maximum() const { return maximumTime; }
 
-	// 文字列の i 番目。
-    char& operator[](std::size_t i) { return data_[i]; }
-    const char& operator[](std::size_t i) const { return data_[i]; }
+	// 1秒単位で繰り上げてdelayを引く。
+	// ただし、remain_timeよりは小さくなるように制限する。
+	TimePoint round_up(TimePoint t) const;
 
-	// 文字列のappend
-	// ⚠ Capacityを超えた場合は、即座にstd::terminate()を呼び出す。
-    FixedString& operator+=(const char* str) {
-        size_t len = std::strlen(str);
-        if (length_ + len > Capacity)
-            std::terminate();
-        std::memcpy(data_ + length_, str, len);
-        length_ += len;
-        data_[length_] = '\0';
-        return *this;
-    }
+	// 探索終了の時間(startTime + search_end >= now()になったら停止)
+	std::atomic<TimePoint> search_end;
 
-	// 文字列のappend
-    FixedString& operator+=(const FixedString& other) { return (*this += other.c_str()); }
+private:
+	TimePoint minimumTime;
+	TimePoint optimumTime;
+	TimePoint maximumTime;
 
-	// string型への暗黙の変換子
-    operator std::string() const { return std::string(data_, length_); }
+	// Options["NetworkDelay"]の値
+	TimePoint network_delay;
+	// Options["MinimalThinkingTime"]の値
+	TimePoint minimum_thinking_time;
 
-	// string_view型への暗黙の変換子
-    operator std::string_view() const { return std::string_view(data_, length_); }
+	// 今回の残り時間 - Options["NetworkDelay2"]
+	TimePoint remain_time;
 
-	// 同一であるかの比較
-    template<typename T>
-    bool operator==(const T& other) const noexcept {
-        return (std::string_view) (*this) == other;
-    }
+	// init()の内部実装用。
+	void init_(const Search::LimitsType& limits, Color us, int ply);
 
-	// 異なる内容であるかの比較
-    template<typename T>
-    bool operator!=(const T& other) const noexcept {
-        return (std::string_view) (*this) != other;
-    }
+	// init()が最後に呼び出された時に各引数。これを保存しておき、reinit()の時にはこれを渡す。
+	Search::LimitsType* lastcall_Limits; // どこかに確保しっぱなしにするだろうからポインタでいいや…
+	Color lastcall_Us;
+	int lastcall_Ply;
 
-	// 格納している文字列をclearする。
-    void clear() {
-        length_  = 0;
-        data_[0] = '\0';
-    }
+#endif
 
-   private:
-	// 文字バッファ(終端の`\0`を考慮して1byte多めに確保)
-    char        data_[Capacity + 1];  // +1 for null terminator
+private:
+	// 探索開始時刻。
+	TimePoint startTime;
 
-	// 格納している文字列の長さ。
-    std::size_t length_;
+	// reset()かreset_for_ponderhit()が呼び出された時刻。
+	TimePoint startTimeFromPonderhit;
 };
 
-// --------------------
-//   コマンドライン
-// --------------------
+extern Timer Time;
 
-struct CommandLine {
-public:
-	CommandLine() {}
-	CommandLine(int _argc, char** _argv) :
-		argc(_argc),
-		argv(_argv) {}
 
-	// コンストラクタでargc,argvを渡さなかった時に、あとから設定する。
-	void set_arg(int _argc, char** _argv) { argc = _argc, argv = _argv; }
-
-	// 起動フォルダを返す
-	// 💡 文字列の末尾には`\`がついている。
-	// ⚠ set_arg()を事前に呼び出して、コマンドラインから渡されたargc, argvをセットしてあること。
-	// 🤔 やねうら王では、Directory::GetBinaryDirectory()を用いる。この関数は内部的に呼び出される。
-    static std::string get_binary_directory() { return g.get_binary_directory(g.argv[0]); }
-
-	// argv0 : コマンドラインから渡されたargv[0]を渡して、そこから起動フォルダを返す。
-	// Stockfishとの互換性のために用意。やねうら王では呼び出さない。
-	static std::string get_binary_directory(std::string argv0);
-
-	// cwd(current working directory)
-	static std::string get_working_directory();
-
-	int    argc;
-	char** argv;
-
-	// global object
-	static CommandLine g;
-};
+// =====   以下は、やねうら王の独自追加   =====
 
 // --------------------
-//     Utility
+//  ツール類
 // --------------------
-
-namespace Utility {
-
-// vectorのなかから、条件に合致するものを探して、見つかればそれを先頭に移動させる。
-// 元の先頭から、その見つけた要素の1つ前までは後方に1つずらす。
-template<typename T, typename Predicate>
-void move_to_front(std::vector<T>& vec, Predicate pred) {
-    auto it = std::find_if(vec.begin(), vec.end(), pred);
-
-    if (it != vec.end())
-    {
-        std::rotate(vec.begin(), it, it + 1);
-    }
-}
-}
-
-// 到達しないことを明示して最適化を促す。
-// 💡 sf_assume(false)ならば、そこには到達しないことを明示する。sf_assume(true)ならば到達する。
-//     clangを除外してあるのは、警告が消えないからっぽい。
-
-#if defined(__GNUC__)
-    #define sf_always_inline __attribute__((always_inline))
-#elif defined(__MSVC)
-    #define sf_always_inline __forceinline
-#else
-    // do nothign for other compilers
-    #define sf_always_inline
-#endif
-
-#if defined(__GNUC__) && !defined(__clang__)
-    #if __GNUC__ >= 13
-        #define sf_assume(cond) __attribute__((assume(cond)))
-    #else
-        #define sf_assume(cond) \
-            do \
-            { \
-                if (!(cond)) \
-                    __builtin_unreachable(); \
-            } while (0)
-    #endif
-#else
-    // do nothing for other compilers
-    #define sf_assume(cond)
-#endif
-
-// --------------------
-//    ツール類
-// --------------------
-
-class ThreadPool;
 
 namespace Tools
 {
@@ -593,7 +412,7 @@ namespace Tools
 	// nameは"Hash" , "eHash"などクリアしたいものの名前を書く。
 	// メモリクリアの途中経過が出力されるときにその名前(引数nameで渡している)が出力される。
 	// name == nullptrのとき、途中経過は表示しない。
-	void memclear(YaneuraOu::ThreadPool& threads, const char* name, void* table, size_t size);
+	extern void memclear(const char* name, void* table, size_t size);
 
 	// insertion sort
 	// 昇順に並び替える。学習時のコードで使いたい時があるので用意してある。
@@ -617,23 +436,23 @@ namespace Tools
 
 	// 途中での終了処理のためのwrapper
 	// コンソールの出力が完了するのを待ちたいので3秒待ってから::exit(EXIT_FAILURE)する。
-	void exit();
+	extern void exit();
 
 	// 指定されたミリ秒だけsleepする。
-	void sleep(u64 ms);
+	extern void sleep(u64 ms);
 
 	// 現在時刻を文字列化したもを返す。(評価関数の学習時などにログ出力のために用いる)
-	std::string now_string();
+	extern std::string now_string();
 
 	// Linux環境ではgetline()したときにテキストファイルが'\r\n'だと
 	// '\r'が末尾に残るのでこの'\r'を除去するためにwrapperを書く。
 	// そのため、ifstreamに対してgetline()を呼び出すときは、
 	// std::getline()ではなくこのこの関数を使うべき。
-	bool getline(std::ifstream& fs, std::string& s);
+	extern bool getline(std::ifstream& fs, std::string& s);
 
 	// マルチバイト文字列をワイド文字列に変換する。
 	// WindowsAPIを呼び出しているのでWindows環境専用。
-	std::wstring MultiByteToWideChar(const std::string& s);
+	extern std::wstring MultiByteToWideChar(const std::string& s);
 
 	// 他言語にあるtry～finally構文みたいなの。
 	// SCOPE_EXIT()マクロの実装で使う。このクラスを直接使わないで。
@@ -652,13 +471,8 @@ namespace Tools
 	class ProgressBar
 	{
 	public:
-		ProgressBar(){}
-
 		// size_ : 全件でいくらあるかを設定する。
 		ProgressBar(u64 size_);
-
-		// また0%に戻す。このインスタンスを再利用する時に用いる。
-		void reset(u64 size_);
 
 		// 進捗を出力する。
 		// current : 現在までに完了している件数
@@ -698,10 +512,7 @@ namespace Tools
 		// メモリ割り当てのエラー
 		MemoryAllocationError,
 
-		// ファイルが存在しないエラー。
-		FileNotFound,
-
-		// ファイルのオープンに失敗。
+		// ファイルのオープンに失敗。ファイルが存在しないなど。
 		FileOpenError,
 
 		// ファイル読み込み時のエラー。
@@ -713,9 +524,6 @@ namespace Tools
 		// ファイルClose時のエラー。
 		FileCloseError,
 
-		// ファイルを間違えているエラー。
-		FileMismatch,
-
 		// フォルダ作成時のエラー。
 		CreateFolderError,
 
@@ -724,13 +532,13 @@ namespace Tools
 	};
 
 	// ResultCodeを文字列化する。
-	std::string to_string(ResultCode);
+	extern std::string to_string(ResultCode);
 
 	// エラーを含む関数の返し値を表現する型
 	// RustにあるOption型のような何か
 	struct Result
 	{
-		constexpr Result(ResultCode code_) : code(code_) {}
+		Result(ResultCode code_) : code(code_) {}
 
 		// エラーの種類
 		ResultCode code;
@@ -748,7 +556,7 @@ namespace Tools
 		std::string to_string() const { return Tools::to_string(code); }
 
 		//  正常終了の時の型を返すbuilder
-		static constexpr Result Ok() { return Result(ResultCode::Ok); }
+		static Result Ok() { return Result(ResultCode::Ok); }
 	};
 }
 
@@ -767,12 +575,7 @@ namespace SystemIO
 	// 引数で渡されるlinesは空であるを期待しているが、空でない場合は、そこに追加されていく。
 	// 引数で渡されるtrimはtrueを渡すと末尾のスペース、タブがトリムされる。
 	// 先頭のUTF-8のBOM(EF BB BF)は無視する。
-	// 💡 filenameは、起動フォルダ相対で指定する。
-	Tools::Result ReadAllLines(const std::string& filename, std::vector<std::string>& lines, bool trim = false);
-
-	// ファイルにすべての行を書き出す。
-	// 💡 filenameは、起動フォルダ相対で指定する。
-	Tools::Result WriteAllLines(const std::string& filename, std::vector<std::string>& lines);
+	extern Tools::Result ReadAllLines(const std::string& filename, std::vector<std::string>& lines, bool trim = false);
 
 
 	// msys2、Windows Subsystem for Linuxなどのgcc/clangでコンパイルした場合、
@@ -784,15 +587,14 @@ namespace SystemIO
 	//
 	// また、callbackされた関数のなかでバッファが確保できなかった場合や、想定していたファイルサイズと異なった場合は、
 	// nullptrを返せば良い。このとき、read_file_to_memory()は、読み込みを中断し、エラーリターンする。
-	// 💡 filenameは、起動フォルダ相対で指定する。
 
-	Tools::Result ReadFileToMemory(const std::string& filename, std::function<void* (size_t)> callback_func);
-	Tools::Result WriteMemoryToFile(const std::string& filename, void* ptr, size_t size);
+	extern Tools::Result ReadFileToMemory(const std::string& filename, std::function<void* (size_t)> callback_func);
+	extern Tools::Result WriteMemoryToFile(const std::string& filename, void* ptr, size_t size);
 
 	// 通常のftell/fseekは2GBまでしか対応していないので特別なバージョンが必要である。
 
-	size_t ftell64(FILE* f);
-	int fseek64(FILE* f, size_t offset, int origin);
+	extern size_t ftell64(FILE* f);
+	extern int fseek64(FILE* f, size_t offset, int origin);
 
 	// C#のTextReaderみたいなもの。
 	// C++のifstreamが遅すぎるので、高速化されたテキストファイル読み込み器
@@ -803,7 +605,6 @@ namespace SystemIO
 		virtual ~TextReader();
 
 		// ファイルをopenする。
-		// 💡 filenameは、起動フォルダ相対で指定する。
 		Tools::Result Open(const std::string& filename);
 
 		// Open()を呼び出してオープンしたファイルをクローズする。
@@ -817,7 +618,6 @@ namespace SystemIO
 		// SkipEmptyLine(),SetTrim()の設定を反映する。
 		// Eofに達した場合は、返し値としてTools::ResultCode::Eofを返す。
 		// 先頭のUTF-8のBOM(EF BB BF)は無視する。
-		// 💡 filenameは、起動フォルダ相対で指定する。
 		Tools::Result ReadLine(std::string& line);
 
 		// ReadLine()で空行を読み飛ばすかどうかの設定。
@@ -899,9 +699,8 @@ namespace SystemIO
 	{
 	public:
 		// 書き出し用のバッファサイズ([byte])
-		static constexpr size_t buf_size = 4096;
+		const size_t buf_size = 4096;
 
-		// 💡 filenameは、起動フォルダ相対で指定する。
 		Tools::Result Open(const std::string& filename);
 
 		// 文字列を書き出す(改行コードは書き出さない)
@@ -952,7 +751,6 @@ namespace SystemIO
 	{
 	public:
 		// ファイルのopen
-		// 💡 filenameは、起動フォルダ相対で指定する。
 		Tools::Result Open(const std::string& filename);
 
 		// ファイルサイズの取得
@@ -973,9 +771,7 @@ namespace SystemIO
 	{
 	public:
 		// ファイルのopen
-		// append == trueで呼び出すと、このあとWriteしたものはファイル末尾に追記される。
-		// 💡 filenameは、起動フォルダ相対で指定する。
-		Tools::Result Open(const std::string& filename, bool append = false);
+		Tools::Result Open(const std::string& filename);
 
 		// ptrの指すメモリからsize[byte]だけファイルに書き込む。
 		// ※　sizeは2GB制限があるので気をつけて。
@@ -983,15 +779,6 @@ namespace SystemIO
 	};
 };
 
-// Reads the file as bytes.
-// Returns std::nullopt if the file does not exist.
-
-// ファイルをバイトとして読み込みます。
-// ファイルが存在しない場合は std::nullopt を返します。
-
-// 💡 filenameは、起動フォルダ相対で指定する。
-
-std::optional<std::string> read_file_to_string(const std::string& filename);
 
 // --------------------
 //       Path
@@ -1007,13 +794,13 @@ namespace Path
 	// 与えられたfilenameが絶対Pathであるかの判定は、内部的にはPath::IsAbsolute()を用いて行う。
 	//
 	// 実際の連結のされ方については、UnitTestに例があるので、それも参考にすること。
-	std::string Combine(const std::string& folder, const std::string& filename);
+	extern std::string Combine(const std::string& folder, const std::string& filename);
 
 	// full path表現から、(フォルダ名をすべて除いた)ファイル名の部分を取得する。
-	std::string GetFileName(const std::string& path);
+	extern std::string GetFileName(const std::string& path);
 
 	// full path表現から、(ファイル名だけを除いた)ディレクトリ名の部分を取得する。
-	std::string GetDirectoryName(const std::string& path);
+	extern std::string GetDirectoryName(const std::string& path);
 
 	// 絶対Pathであるかの判定。
 	// ※　std::filesystem::absolute() は MSYS2 で Windows の絶対パスの判定に失敗するらしいので自作。
@@ -1026,11 +813,7 @@ namespace Path
 	//   \\MyNet\MyPC\Eval  ← WindowsのUNC
 	//   ~myeval            ← Linuxのhome
 	//   /YaneuraOu/Eval    ← Windows、Linuxのroot
-	bool IsAbsolute(const std::string& path);
-
-	// ファイルが存在するかの確認
-	bool Exists(const std::string& path);
-
+	extern bool IsAbsolute(const std::string& path);
 };
 
 // --------------------
@@ -1044,16 +827,26 @@ namespace Directory
 	// 指定されたフォルダに存在するファイルをすべて列挙する。
 	// 列挙するときに引数extensionで列挙したいファイル名の拡張子を指定できる。(例 : ".bin")
 	// 拡張子として""を指定すればすべて列挙される。
-	std::vector<std::string> EnumerateFiles(const std::string& sourceDirectory, const std::string& extension);
+	extern std::vector<std::string> EnumerateFiles(const std::string& sourceDirectory, const std::string& extension);
 
 	// フォルダを作成する。
 	// working directory相対で指定する。dir_nameに日本語は使っていないものとする。
 	// ※　Windows環境だと、この関数名、WinAPIのCreateDirectoryというマクロがあって…。
 	// 　ゆえに、CreateDirectory()をやめて、CreateFolder()に変更する。
-	Tools::Result CreateFolder(const std::string& dir_name);
+	extern Tools::Result CreateFolder(const std::string& dir_name);
 
-	// 起動時のフォルダを返す。
-	std::string GetBinaryFolder();
+	// working directoryを返す。
+	// "GetCurrentDirectory"という名前はWindowsAPI(で定義されているマクロ)と競合する。
+	extern std::string GetCurrentFolder();
+}
+
+namespace CommandLine {
+	// 起動時にmain.cppから呼び出される。
+	// CommandLine::binaryDirectory , CommandLine::workingDirectoryを設定する。
+	extern void init(int argc, char* argv[]);
+
+	extern std::string binaryDirectory;  // path of the executable directory
+	extern std::string workingDirectory; // path of the working directory
 }
 
 // --------------------
@@ -1107,10 +900,6 @@ namespace Parser
 
 		// 次のtokenを返す。
 		std::string get_text();
-
-		// 現在のcursor位置から残りの文字列を取得する。
-		// peek_text()した分があるなら、それも先頭にくっつけて返す。
-		std::string get_rest();
 
 		// 次の文字列を数値化して返す。
 		// 空の文字列である場合は引数の値がそのまま返る。
@@ -1217,7 +1006,6 @@ namespace Math {
 //    文字列 拡張
 // --------------------
 
-// 文字列拡張(やねうら王独自)
 namespace StringExtension
 {
 	// 大文字・小文字を無視して文字列の比較を行う。
@@ -1225,74 +1013,55 @@ namespace StringExtension
 	// 後者がどうも動作が怪しい。自前実装しておいたほうが無難。
 	// stricmpは、string case insensitive compareの略？
 	// s1==s2のとき0(false)を返す。
-	bool stricmp(const std::string& s1, const std::string& s2);
+	extern bool stricmp(const std::string& s1, const std::string& s2);
 
 	// 行の末尾の"\r","\n",スペース、"\t"を除去した文字列を返す。
 	// ios::binaryでopenした場合などには'\r'なども入っていることがあるので…。
-	std::string trim(const std::string& input);
+	extern std::string trim(const std::string& input);
 
 	// trim()の高速版。引数で受け取った文字列を直接trimする。(この関数は返し値を返さない)
-	void trim_inplace(std::string& input);
+	extern void trim_inplace(std::string& input);
 
 	// 行の末尾の数字を除去した文字列を返す。
 	// sfenの末尾の手数を削除する用
 	// 末尾のスペースを詰めたあと数字を詰めてそのあと再度スペースを詰める処理になっている。
 	// 例 : "abc 123 "→"abc"となって欲しいので。
-	std::string trim_number(const std::string& input);
+	extern std::string trim_number(const std::string& input);
 
 	// trim_number()の高速版。引数で受け取った文字列を直接trimする。(この関数は返し値を返さない)
-	void trim_number_inplace(std::string& s);
+	extern void trim_number_inplace(std::string& s);
 
 	// 文字列をint化する。int化に失敗した場合はdefault_の値を返す。
-	int to_int(const std::string input, int default_);
-
-	// 文字列をfloat化する。float化に失敗した場合はdefault_の値を返す。
-	float to_float(const std::string input, float default_);
+	extern int to_int(const std::string input, int default_);
 
 	// スペース、タブなど空白に相当する文字で分割して返す。
-	std::vector<std::string> split(const std::string& input);
+	extern std::vector<std::string> split(const std::string& input);
 
 	// 先頭にゼロサプライした文字列を返す。
 	// 例) n = 123 , digit = 6 なら "000123"という文字列が返る。
-	std::string to_string_with_zero(u64 n, int digit);
+	extern std::string to_string_with_zero(u64 n, int digit);
 
 	// --- 以下、C#のstringクラスにあるやつ。
 
 	// 文字列valueが、文字列endingで終了していればtrueを返す。
-	bool StartsWith(std::string const& value, std::string const& starting);
+	extern bool StartsWith(std::string const& value, std::string const& starting);
 
 	// 文字列valueが、文字列endingで終了していればtrueを返す。
-	bool EndsWith(std::string const& value, std::string const& ending);
+	extern bool EndsWith(std::string const& value, std::string const& ending);
 
 	// 文字列sのなかに文字列tが含まれるかを判定する。含まれていればtrueを返す。
-	bool Contains(const std::string& s, const std::string& t);
+	extern bool Contains(const std::string& s, const std::string& t);
 
 	// 文字列valueに対して文字xを文字yに置換した新しい文字列を返す。
-	std::string Replace(std::string const& value, char x, char y);
+	extern std::string Replace(std::string const& value, char x, char y);
 
 	// 文字列を大文字にして返す。
-	std::string ToUpper(std::string const& value);
+	extern std::string ToUpper(std::string const& value);
 
 	// sを文字列spで分割した文字列集合を返す。
-	std::vector<std::string_view> Split(std::string_view s, std::string_view delimiter);
+	extern std::vector<std::string> Split(const std::string& s , const std::string& sep);
 
-	// Pythonの delemiter.join(v) みたいなの。
-	// 例: v = [1,2,3] に対して ' '.join(v) == "1 2 3"
-	std::string Join(const std::vector<std::string>& v , const std::string& delimiter);
 };
-
-// sを文字列spで分割した文字列集合を返す。
-// ※ Stockfishとの互換性のために用意。
-std::vector<std::string_view> split(std::string_view s, std::string_view delimiter);
-
-// スペース相当文字列を削除する。⇨ NUMAの処理に必要
-void remove_whitespace(std::string& s);
-
-// スペース相当文字列かどうかを判定する。⇨ NUMAの処理に必要
-bool is_whitespace(std::string_view s);
-
-// "123"みたいな文字列を123のように数値型(size_t)に変換する。
-size_t str_to_size_t(const std::string& s);
 
 // --------------------
 //    Concurrent
@@ -1438,7 +1207,7 @@ public:
 	void push(const std::string& s);
 
 	// main()に引数として渡されたパラメーターを解釈してqueueに積む。
-	void parse_args(const CommandLine& cli);
+	void parse_args(int argc, char* argv[]);
 
 private:
 	// 先行入力されたものを積んでおくqueue。
@@ -1446,25 +1215,15 @@ private:
 	std::queue<std::string> cmds;
 };
 
+extern StandardInput std_input;
+
 // --------------------
 //     UnitTest
 // --------------------
 
 namespace Misc {
 	// このheaderに書いてある関数のUnitTest。
-	void UnitTest(Test::UnitTester& tester, IEngine& engine);
+	extern void UnitTest(Test::UnitTester& tester);
 }
-
-} // namespace YaneuraOu
-
-// FixedString型のstd::hashの特殊化
-// 📝 FixedString<N> を string_view に変換して
-//     string_view のハッシュ関数をそのまま使うので高速
-template<std::size_t N>
-struct std::hash<YaneuraOu::FixedString<N>> {
-    std::size_t operator()(const YaneuraOu::FixedString<N>& fstr) const noexcept {
-        return std::hash<std::string_view>{}((std::string_view) fstr);
-    }
-};
 
 #endif // #ifndef MISC_H_INCLUDED

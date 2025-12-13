@@ -13,21 +13,121 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="ソース ファイル\YaneuraOu">
+      <UniqueIdentifier>{5a535319-966c-44dc-9607-265d3f647674}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-    <ClInclude Include="pch.h">
-      <Filter>ヘッダー ファイル</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="dllmain.cpp">
+    <ClCompile Include="..\..\training_data_loader.cpp">
       <Filter>ソース ファイル</Filter>
     </ClCompile>
-    <ClCompile Include="pch.cpp">
-      <Filter>ソース ファイル</Filter>
+    <ClCompile Include="..\..\YaneuraOu\source\bitboard.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\position.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\extra\sfen_packer.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\thread.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\types.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\mate\mate.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\testcmd\unit_test.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\eval\evaluate.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\eval\evaluate_bona_piece.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\eval\material\evaluate_material.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\mate\mate1ply_without_effect.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\misc.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\movegen.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\usi_option.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\tt.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\book\book.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\usi.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\book\apery_book.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\engine\yaneuraou-engine\yaneuraou-search.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\timeman.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\movepick.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\testcmd\normal_test_cmd.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\testcmd\mate_test_cmd.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\mate\mate_solver.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\book\makebook.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\book\makebook2015.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\book\makebook2019.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\learn\multi_think.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\learn\learner.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\eval\nnue\evaluate_nnue.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\eval\nnue\features\half_kp.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\eval\nnue\evaluate_nnue_learner.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\eval\nnue\features\half_relative_kp.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\learn\learning_tools.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\eval\evaluate_mir_inv_tools.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\YaneuraOu\source\testcmd\benchmark.cpp">
+      <Filter>ソース ファイル\YaneuraOu</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

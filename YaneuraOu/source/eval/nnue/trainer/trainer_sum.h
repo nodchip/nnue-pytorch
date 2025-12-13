@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の学習クラステンプレートのSum用特殊化
 
-#ifndef CLASSIC_NNUE_TRAINER_SUM_H
-#define CLASSIC_NNUE_TRAINER_SUM_H
+#ifndef _NNUE_TRAINER_SUM_H_
+#define _NNUE_TRAINER_SUM_H_
 
 #include "../../../config.h"
 
@@ -11,8 +11,9 @@
 #include "../layers/sum.h"
 #include "trainer.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE {
+namespace Eval {
+
+namespace NNUE {
 
 // 学習：複数の層の出力の和を取る層
 template <typename FirstPreviousLayer, typename... RemainingPreviousLayers>
@@ -182,8 +183,9 @@ class Trainer<Layers::Sum<PreviousLayer>> {
   std::vector<LearnFloatType> output_;
 };
 
-} // namespace Eval::NNUE
-} // namespace YaneuraOu
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_LEARN) && defined(EVAL_NNUE)
 

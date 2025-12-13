@@ -2,16 +2,6 @@
 
 #if defined(YANEURAOU_ENGINE_DEEP) && defined(ONNXRUNTIME)
 
-#include "../../usi.h"
-/*
-	⚠ usi.hが numa.h を読み込み、numa.hのなかで Windows.h を読み込み、Windows.hの読み込みに際してNOMINMAXを定義している。
-		これによって、min,maxがマクロとみなされるのを回避しているのだが、 dml_provider_factory.h のような
-		Windows.hに依存するheaderを先に読み込むんでしまうと、NOMINMAXを定義せずにWindows.hを読み込んでしまうので、
-		min,naxがマクロとみなされてしまいコンパイルエラーになる。
-
-		そのため、usi.hを最初にincludeする必要がある。
-*/
-
 //#include "dlshogi_types.h"
 
 #if defined(ORT_DML)
@@ -25,14 +15,13 @@
 #else
 #include <cpu_provider_factory.h>
 #endif
+#include "../../usi.h"
 
 using namespace std;
-
-namespace YaneuraOu {
 using namespace Tools;
 
-namespace Eval::dlshogi {
-
+namespace Eval::dlshogi
+{
 	// モデルファイルの読み込み。
 	Result NNOnnxRuntime::load(const std::string& model_filename , int gpu_id , int batch_size)
 	{
@@ -117,9 +106,7 @@ namespace Eval::dlshogi {
 		// CUDAからデバイス数が取得出来ない時は、デバイス数 max_gpu と仮定。
 		// 実装していないgpu_idに対して、USIオプション UCT_Threads1 ~ UCT_Threads16 で指定された値を無視して、
 		// 自動的にスレッド数を 0 として取り扱う処理を行わなくなる。
-
-		// 🤔 -1を返すようにする。呼び出し側でなんとかして欲しい。
-		device_count = - 1;
+		device_count = max_gpu;
 #endif
 		return device_count;
 #else
@@ -160,7 +147,7 @@ namespace Eval::dlshogi {
 	}
 
 } // namespace Eval::dlshogi
-} // namespace YaneuraOu
+
 
 #endif // defined(YANEURAOU_ENGINE_DEEP) && defined(ONNXRUNTIME)
 

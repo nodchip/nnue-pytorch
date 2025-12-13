@@ -1,13 +1,13 @@
 ﻿#include "../config.h"
 
-#if defined (ENABLE_MAKEBOOK_CMD)
+#if defined (ENABLE_MAKEBOOK_CMD) && (defined(EVAL_LEARN) || defined(YANEURAOU_ENGINE_DEEP))
 
 #include "book.h"
 #include "../position.h"
 #include <sstream>
 
 using namespace std;
-namespace YaneuraOu {
+
 namespace Book
 {
 
@@ -20,29 +20,63 @@ namespace Book
 	// 定跡関連のコマンド。2015年ごろに作ったmakebookコマンド。
 	int makebook2015(Position& pos, istringstream& is, const string& token);
 
-	// 定跡生成コマンド2025年度版。ペタショック化コマンド。
-    int makebook2025(istringstream& is, const string& token, const OptionsMap& options);
+	// 定跡生成コマンド2019年度版。makebook2019.cppで定義されている。テラショック定跡手法。
+	int makebook2019(Position& pos, istringstream& is, const string& token);
+
+#if defined(YANEURAOU_ENGINE_DEEP)
+	// 定跡生成コマンド2021年度版。makebook2021.cppで定義されている。MCTSによる生成。
+	int makebook2021(Position& pos, istringstream& is, const string& token);
+#endif
 
 	// ---------------------------------------------------------------------------------------------
 
 	// makebookコマンドの処理本体
 	// フォーマット等については docs/解説.txt, docs/USI拡張コマンド.txt を見ること。
-    void makebook(IEngine& engine, istringstream& is)
+	void makebook_cmd(Position& pos, istringstream& is)
 	{
-        // このタイミングでisready()で初期化しておく。
-        // (そうしないとPosition classやevalが使えなくて困る)
-        engine.isready();
+		// makebookコマンドは、ほとんどがEVAL_LEARNが有効でないと使えないので、丸ごと使えないようにしておく。
+#if ! (defined (ENABLE_MAKEBOOK_CMD) && (defined(EVAL_LEARN) || defined(YANEURAOU_ENGINE_DEEP)))
+		cout << "Error!:define EVAL_LEARN and (YANEURAOU_ENGINE or YANEUROU_ENGINE_DEEP)" << endl;
+		return;
+#endif
+
+		// 評価関数を読み込まないとPositionのset()が出来ないのでis_ready()の呼び出しが必要。
+		// ただし、このときに定跡ファイルを読み込まれると読み込みに時間がかかって嫌なので一時的にno_bookに変更しておく。
+		auto original_book_file = Options["BookFile"];
+		Options["BookFile"] = string("no_book");
+
+		// IgnoreBookPlyオプションがtrue(デフォルトでtrue)のときは、定跡書き出し時にply(手数)のところを無視(0)にしてしまうので、
+		// これで書き出されるとちょっと嫌なので一時的にfalseにしておく。
+		auto original_ignore_book_ply = (bool)Options["IgnoreBookPly"];
+		Options["IgnoreBookPly"] = false;
+
+		Tools::ProgressBar::enable(true);
+		SCOPE_EXIT(
+			Options["BookFile"] = original_book_file;
+			Options["IgnoreBookPly"] = original_ignore_book_ply;
+			Tools::ProgressBar::enable(false);
+			);
+
+		// ↑ SCOPE_EXIT()により、この関数を抜けるときには復旧する。
+
+		is_ready();
 
 		string token;
 		is >> token;
 
 		// 2015年ごろに作ったmakebookコマンド
-		if (makebook2015(engine.get_position(), is, token))
+		if (makebook2015(pos, is, token))
 			return;
 
-		// 2025年に作ったmakebook拡張コマンド
-        if (makebook2025(is, token, engine.get_options()))
+		// 2019年以降に作ったmakebook拡張コマンド
+		if (makebook2019(pos, is, token))
 			return;
+
+#if defined(YANEURAOU_ENGINE_DEEP)
+		// 2021年に作ったmakebook拡張コマンド
+		if (makebook2021(pos, is, token))
+			return;
+#endif
 
 		// いずれのコマンドも処理しなかったので、使用方法を出力しておく。
 
@@ -53,10 +87,10 @@ namespace Book
 		cout << "> makebook sort book_src.db book_sorted.db" << endl;
 		cout << "> makebook convert_from_apery book_src.bin book_converted.db" << endl;
 		cout << "> makebook build_tree book2019.db user_book1.db" << endl;
-		cout << "> makebook peta_shock book.db user_book1.db" << endl;
+
 	}
 
 } // namespace Book
-} // namespace YaneuraOu
 
-#endif // defined (ENABLE_MAKEBOOK_CMD)
+#endif // defined (ENABLE_MAKEBOOK_CMD) && (defined(EVAL_LEARN) || defined(YANEURAOU_ENGINE_DEEP))
+

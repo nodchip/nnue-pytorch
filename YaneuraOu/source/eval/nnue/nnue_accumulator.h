@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の差分計算用のクラス
 
-#ifndef CLASSIC_NNUE_ACCUMULATOR_H_
-#define CLASSIC_NNUE_ACCUMULATOR_H_
+#ifndef _NNUE_ACCUMULATOR_H_
+#define _NNUE_ACCUMULATOR_H_
 
 #include "../../config.h"
 
@@ -9,13 +9,13 @@
 
 #include "nnue_architecture.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE {
+namespace Eval {
+
+namespace NNUE {
 
 // 入力特徴量をアフィン変換した結果を保持するクラス
 // 最終的な出力である評価値も一緒に持たせておく
-// AVX-512命令を使用する場合に64bytesのアライメントが要求される。
-struct alignas(64) Accumulator {
+struct alignas(32) Accumulator {
   std::int16_t
       accumulation[2][kRefreshTriggers.size()][kTransformedFeatureDimensions];
   Value score = VALUE_ZERO;
@@ -23,8 +23,9 @@ struct alignas(64) Accumulator {
   bool computed_score = false;
 };
 
-} // namespace Eval::NNUE
-} // namespace YaneuraOu
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_NNUE)
 

@@ -7,10 +7,10 @@
 #endif
 #include "../misc.h"
 
-namespace YaneuraOu {
-namespace EvalLearningTools {
+using namespace Eval;
 
-	using namespace Eval;
+namespace EvalLearningTools
+{
 
 	// --- static variables
 
@@ -251,8 +251,6 @@ namespace EvalLearningTools {
 			first = false;
 		}
 	}
-
-} // namespace EvalLearningTools
-} // namespace YaneuraOu
+}
 
 #endif

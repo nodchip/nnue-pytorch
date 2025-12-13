@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の学習で用いるインターフェイス
 
-#ifndef CLASSIC_EVALUATE_NNUE_LEARNER_H_
-#define CLASSIC_EVALUATE_NNUE_LEARNER_H_
+#ifndef _EVALUATE_NNUE_LEARNER_H_
+#define _EVALUATE_NNUE_LEARNER_H_
 
 #include "../../config.h"
 
@@ -9,8 +9,9 @@
 
 #include "../../learn/learn.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE {
+namespace Eval {
+
+namespace NNUE {
 
 // 学習の初期化を行う
 void InitializeTraining(double eta1, u64 eta1_epoch,
@@ -38,8 +39,9 @@ void UpdateParameters(u64 epoch);
 // 学習に問題が生じていないかチェックする
 void CheckHealth();
 
-}  // namespace Eval::NNUE
-}  // namespace YaneuraOu
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_LEARN) && defined(EVAL_NNUE)
 

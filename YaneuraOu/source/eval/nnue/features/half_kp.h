@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の入力特徴量HalfKPの定義
 
-#ifndef CLASSIC_NNUE_FEATURES_HALF_KP_H
-#define CLASSIC_NNUE_FEATURES_HALF_KP_H
+#ifndef _NNUE_FEATURES_HALF_KP_H_
+#define _NNUE_FEATURES_HALF_KP_H_
 
 #include "../../../config.h"
 
@@ -10,8 +10,11 @@
 #include "../../../evaluate.h"
 #include "features_common.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE::Features {
+namespace Eval {
+
+namespace NNUE {
+
+namespace Features {
 
 // 特徴量HalfKP：自玉または敵玉の位置と、玉以外の駒の位置の組み合わせ
 template <Side AssociatedKing>
@@ -50,8 +53,11 @@ class HalfKP {
                         BonaPiece** pieces, Square* sq_target_k);
 };
 
-} // namespace Eval::NNUE::Features
-} // namespace YaneuraOu
+}  // namespace Features
+
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_NNUE)
 

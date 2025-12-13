@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の入力特徴量HalfRelativeKPの定義
 
-#ifndef CLASSIC_NNUE_FEATURES_HALF_RELATIVE_KP_H
-#define CLASSIC_NNUE_FEATURES_HALF_RELATIVE_KP_H
+#ifndef _NNUE_FEATURES_HALF_RELATIVE_KP_H_
+#define _NNUE_FEATURES_HALF_RELATIVE_KP_H_
 
 #include "../../../config.h"
 
@@ -10,8 +10,11 @@
 #include "../../../evaluate.h"
 #include "features_common.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE::Features {
+namespace Eval {
+
+namespace NNUE {
+
+namespace Features {
 
 // 特徴量HalfRelativeKP：自玉または敵玉を基準とした、玉以外の各駒の相対位置
 template <Side AssociatedKing>
@@ -56,8 +59,11 @@ class HalfRelativeKP {
                         BonaPiece** pieces, Square* sq_target_k);
 };
 
-} // namespace Eval::NNUE::Features
-} // namespace YaneuraOu
+}  // namespace Features
+
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_NNUE)
 

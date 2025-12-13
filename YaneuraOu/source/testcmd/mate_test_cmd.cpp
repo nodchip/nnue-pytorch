@@ -22,7 +22,7 @@
 #endif
 
 using namespace std;
-namespace YaneuraOu {
+
 namespace {
 
 	// ----------------------------------
@@ -30,7 +30,7 @@ namespace {
 	// ----------------------------------
 
 	// N手詰みの局面を生成する。
-	void gen_mate(IEngine& engine, std::istringstream& is)
+	void gen_mate(Position& pos, std::istringstream& is)
 	{
 #if !defined (EVAL_LEARN)
 		cout << "Error! genmate command is only for EVAL_LEARN" << endl;
@@ -106,7 +106,7 @@ namespace {
 
 			while (true)
 			{
-				pos.set_hirate(&(states[0]));
+				pos.set_hirate(&(states[0]), Threads[thread_id]);
 
 				for (int ply = 0; ply < MAX_PLY; ++ply)
 				{
@@ -119,7 +119,7 @@ namespace {
 					auto pv = Learner::search(pos, search_depth , 1);
 
 					Move m = pv.second[0];
-					if (m == Move::none())
+					if (m == MOVE_NONE)
 						break;
 
 					pos.do_move(m, states[ply + 1]);
@@ -133,8 +133,8 @@ namespace {
 
 					// mate_min_ply - 2で詰まなくて、
 					// mate_max_plyで詰むことを確認すれば良いはず。
-					if (solver.mate_odd_ply(newPos, min_ply - 2, true) == Move::none()
-						&& solver.mate_odd_ply(newPos, max_ply, true) != Move::none())
+					if (solver.mate_odd_ply(newPos, min_ply - 2, true) == MOVE_NONE
+						&& solver.mate_odd_ply(newPos, max_ply, true) != MOVE_NONE)
 					{
 						// 発見した。
 
@@ -189,12 +189,8 @@ namespace {
 
 	// 詰みルーチンに関するbenchをとる。
 	// このbenchには、"test genmate"コマンドで生成した詰み局面を利用すると良い。
-	void mate_bench(IEngine& engine, std::istringstream& is)
+	void mate_bench(Position& pos, std::istringstream& is)
 	{
-		auto& options = engine.get_options();
-		auto& threads = engine.get_threads();
-
-		Position pos;
 
 #if !(defined (USE_MATE_SOLVER) || defined(USE_MATE_DFPN))
 		cout << "Error! define USE_MATE_SOLVER or USE_MATE_DFPN" << endl;
@@ -315,7 +311,7 @@ namespace {
 		u64 nodes_searched;
 
 		auto bench = [&](function<Move()> solver, string test_name) {
-			ElapsedTimer timer;
+			Timer timer;
 			timer.reset();
 
 			cout << "===== " << test_name << " =====" << endl
@@ -358,7 +354,7 @@ namespace {
 				auto sfen = (*problems)[i];
 				sfen2 = sfen;
 				StateInfo si;
-				pos.set(sfen, &si);
+				pos.set(sfen, &si, Threads.main());
 				Move move;
 				for (size_t j = 0; j < loop; ++j)
 				{
@@ -401,13 +397,13 @@ namespace {
 
 		if (test_mode & 16)
 		{
-			mate_hash.clear(threads);
+			mate_hash.clear();
 			bench([&]() { auto m = dfpn4.mate_dfpn(pos, nodes_limit); nodes_searched += dfpn4.get_nodes_searched(); return m; }, "mate_dfpn4 : Node32bitWithHash");
 		}
 
 		if (test_mode & 32)
 		{
-			mate_hash.clear(threads);
+			mate_hash.clear();
 			bench([&]() { auto m = dfpn5.mate_dfpn(pos, nodes_limit); nodes_searched += dfpn5.get_nodes_searched(); return m; }, "mate_dfpn5 : Node48bitOrderingWithHash");
 		}
 
@@ -423,14 +419,12 @@ namespace {
 	// ----------------------------------
 
 	// 現在の局面に対してdf-pn詰め将棋ルーチンを呼び出す。
-	void mate_dfpn(IEngine& engine, std::istringstream& is)
+	void mate_dfpn(Position& pos, std::istringstream& is)
 	{
 #if !defined(USE_MATE_DFPN)
 		cout << "Error! : define USE_MATE_DFPN" << endl;
 		return;
 #else
-		// 現在の局面
-		auto& pos = engine.get_position();
 
 		// default 1000万ノード(どうせ先にメモリが足りなくなる)
 		size_t nodes = 10000000;
@@ -470,13 +464,13 @@ namespace {
 
 		dfpn.alloc(mem);
 
-		ElapsedTimer time;
+		Timer time;
 		cout << "start mate." << endl;
 		time.reset();
 		Move m = dfpn.mate_dfpn(pos, (u32)nodes);
 		cout << "time = " << time.elapsed() << endl;
 		auto nodes_searched = dfpn.get_nodes_searched();
-		if (m != Move::none() && m != Move::null())
+		if (m != MOVE_NONE && m != MOVE_NULL)
 		{
 			cout << "solved! , nodes_searched = " << nodes_searched << endl;
 
@@ -487,7 +481,7 @@ namespace {
 			cout << endl;
 		}
 		else {
-			if (m == Move::null())
+			if (m == MOVE_NULL)
 				cout << "solved! this is no mate. nodes_searched = " << nodes_searched << endl;
 			else if (dfpn.is_out_of_memory())
 				cout << "out of memory" << endl;
@@ -540,29 +534,32 @@ namespace {
 #endif
 
 	// MATE ENGINEのテスト。(ENGINEに対して局面図を送信する)
-	void mate_bench2(IEngine& engine, [[maybe_unused]] std::istringstream& is)
+	void mate_bench2(Position& pos, std::istringstream& is)
 	{
 #if !defined (TANUKI_MATE_ENGINE) && !defined(YANEURAOU_MATE_ENGINE)
 		cout << "Error! : define TANUKI_MATE_ENGINE or YANEURAOU_MATE_ENGINE" << endl;
 #else
-		auto& options = engine.get_options();
-		auto& threads = engine.get_threads();
-
 		string token;
 
 		// →　デフォルト1024にしておかないと置換表あふれるな。
 		string ttSize = (is >> token) ? token : "1024";
 
-		//options["USI_Hash"] = ttSize;
-		options.set_option_if_exists("USI_Hash", ttSize);
+		Options["USI_Hash"] = ttSize;
+
+		Search::LimitsType limits;
+
+		// ベンチマークモードにしておかないとPVの出力のときに置換表を漁られて探索に影響がある。
+		limits.bench = true;
 
 		// 探索制限
-		Search::LimitsType limits;
 		limits.nodes = 0;
 		limits.mate = 100000; // 100秒
 
+		// Optionsの影響を受けると嫌なので、その他の条件を固定しておく。
+		limits.enteringKingRule = EKR_NONE;
+
 		// 評価関数の読み込み等
-		engine.isready();
+		is_ready();
 
 		// トータルの探索したノード数d
 		int64_t nodes = 0;
@@ -571,29 +568,24 @@ namespace {
 		int64_t nodes_main = 0;
 
 		// ベンチの計測用タイマー
-		ElapsedTimer time;
+		Timer time;
+		time.reset();
 
 		for (const char* sfen : TestMateEngineSfen) {
 			Position pos;
 			StateListPtr st(new StateList(1));
-			pos.set(sfen, &st->back());
+			pos.set(sfen, &st->back(), Threads.main());
 
 			sync_cout << "\nPosition: " << sfen << sync_endl;
 
 			// 探索時にnpsが表示されるが、それはこのglobalなTimerに基づくので探索ごとにリセットを行なうようにする。
-			time.reset();
+			Time.reset();
 
-			StateListPtr states(new std::deque<StateInfo>(1));
+			Threads.start_thinking(pos, st , limits);
+			Threads.main()->wait_for_search_finished(); // 探索の終了を待つ。
 
-			threads.start_thinking(options, pos, st, limits);
-			threads.wait_for_search_finished(); // 探索の終了を待つ。
-
-			// TODO : あとで
-			//   Position::do_move()でノード数をインクリメントしなくなったので
-			//   この方法で取得できない。
-
-			nodes += threads.nodes_searched();
-			nodes_main += threads.nodes_searched();
+			nodes += Threads.nodes_searched();
+			nodes_main += Threads.main()->rootPos.this_thread()->nodes.load(memory_order_relaxed);
 		}
 
 		auto elapsed = time.elapsed() + 1; // 0除算の回避のため
@@ -603,7 +595,7 @@ namespace {
 			<< "\nNodes searched  : " << nodes
 			<< "\nNodes/second    : " << 1000 * nodes / elapsed;
 
-		if ((int)options["Threads"] > 1)
+		if ((int)Options["Threads"] > 1)
 			cout
 			<< "\nNodes searched(main thread) : " << nodes_main
 			<< "\nNodes/second  (main thread) : " << 1000 * nodes_main / elapsed;
@@ -623,21 +615,20 @@ namespace {
 namespace Test
 {
 	// 詰み関係のテストコマンド。コマンドを処理した時 trueが返る。
-	bool mate_test_cmd(IEngine& engine, std::istringstream& is, const std::string& token)
+	bool mate_test_cmd(Position& pos , std::istringstream& is, const std::string& token)
 	{
-		if (token == "genmate")         gen_mate(engine,is);         // N手詰みの局面を生成する。
-		else if (token == "matebench")  mate_bench(engine,is);       // 詰みルーチンに関するbenchをとる。
-		else if (token == "matebench2") mate_bench2(engine,is);      // MATE ENGINEのテスト。(ENGINEに対して局面図を送信する)
-		else if (token == "dfpn")       mate_dfpn(engine,is);        // 現在の局面に対してdf-pn詰め将棋ルーチンを呼び出す。
-		//else if (token == "matesolve") mate_solve(engine,is);      // 現在の局面に対してN手詰みルーチンを呼び出す。
-		else return false;									         // どのコマンドも処理することがなかった
+		if (token == "genmate")         gen_mate(pos, is);         // N手詰みの局面を生成する。
+		else if (token == "matebench")  mate_bench(pos, is);       // 詰みルーチンに関するbenchをとる。
+		else if (token == "matebench2") mate_bench2(pos, is);      // MATE ENGINEのテスト。(ENGINEに対して局面図を送信する)
+		else if (token == "dfpn")       mate_dfpn(pos, is);        // 現在の局面に対してdf-pn詰め将棋ルーチンを呼び出す。
+		//else if (token == "matesolve") mate_solve(pos, is);      // 現在の局面に対してN手詰みルーチンを呼び出す。
+		else return false;									       // どのコマンドも処理することがなかった
 			
 		// いずれかのコマンドを処理した。
 		return true;
 	}
 
-} // namespace Test
+}
 
-} // namespace YaneuraOu
 
 #endif // defined(ENABLE_TEST_CMD)

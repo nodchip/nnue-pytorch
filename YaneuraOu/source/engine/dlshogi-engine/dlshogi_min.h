@@ -9,7 +9,6 @@
 
 // 外部から探索部の一部の機能だけ呼び出したい時用のheader
 
-namespace YaneuraOu {
 namespace dlshogi {
 
 	// 探索結果を返す。
@@ -18,7 +17,7 @@ namespace dlshogi {
 	// のようにUSIのgoコマンド相当で探索したあと、rootの各候補手とそれに対応する評価値を返す。
 	//
 	// ※　実際の使用例は、make_book2021.cppのthink_sub()にあるのでそれも参考にすること。
-	void GetSearchResult(std::vector<std::pair<Move, float>>& result);
+	extern void GetSearchResult(std::vector<std::pair<Move, float>>& result);
 
 	// sfenとnode数を保持する構造体
 	struct SfenNode
@@ -51,17 +50,27 @@ namespace dlshogi {
 	//    "startpos moves 7g7f 8c8d"
 	//    "startpos moves 2g2f 3c3d"
 	//   なので、そうなるように文字列を結合すること。
-	void GetTopVisitedNodes(size_t n, SfenNodeList& sfens, bool same_color);
+	extern void GetTopVisitedNodes(size_t n, SfenNodeList& sfens, bool same_color);
 
 	// 探索したノード数を返す。
 	// これは、ThreadPool classがnodes_searched()で返す値とは異なる。
 	//  →　そちらは、Position::do_move()した回数。
 	// こちらは、GPUでevaluate()を呼び出した回数。俗に言うnodes visited。
-	u64 nodes_visited();
+	extern u64 nodes_visited();
+}
 
-} // namespace dlshogi
-} // namespace YaneuraOu
+namespace Eval::dlshogi {
 
+	// 価値(勝率)を評価値[cp]に変換。
+	// USIではcp(centi-pawn)でやりとりするので、そのための変換に必要。
+	// 	 eval_coef : 勝率を評価値に変換する時の定数。default = 756
+	// 
+	// 返し値 :
+	//   +29900は、評価値の最大値
+	//   -29900は、評価値の最小値
+	//   +30000,-30000は、(おそらく)詰みのスコア
+	Value value_to_cp(const float score, float eval_coef);
+}
 
 #endif // defined(YANEURAOU_ENGINE_DEEP)
 

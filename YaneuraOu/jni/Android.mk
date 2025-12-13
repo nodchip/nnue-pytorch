@@ -55,6 +55,10 @@ YANEURAOU_EDITION := YANEURAOU_ENGINE_NNUE
 #YANEURAOU_EDITION := MATE_ENGINE
 #YANEURAOU_EDITION := USER_ENGINE
 
+# やねうら王のcluster機能を使いたいなら、これもdefineする。(define if you want to use YO-cluster)
+YO_CLUSTER = OFF
+#YO_CLUSTER = ON
+
 # エンジンの表示名 (engine displayname)
 # ("usi"コマンドに対して出力される)
 #ENGINE_NAME :=
@@ -167,22 +171,17 @@ LOCAL_SRC_FILES := \
   ../source/movegen.cpp                                                \
   ../source/position.cpp                                               \
   ../source/usi.cpp                                                    \
-  ../source/usioption.cpp                                              \
+  ../source/usi_option.cpp                                             \
   ../source/thread.cpp                                                 \
   ../source/tt.cpp                                                     \
   ../source/movepick.cpp                                               \
   ../source/timeman.cpp                                                \
-  ../source/memory.cpp                                                 \
-  ../source/engine.cpp                                                 \
-  ../source/search.cpp                                                 \
-  ../source/score.cpp                                                  \
-  ../source/benchmark.cpp                                              \
-  ../source/tune.cpp                                                   \
   ../source/book/apery_book.cpp                                        \
   ../source/book/book.cpp                                              \
   ../source/extra/bitop.cpp                                            \
   ../source/extra/long_effect.cpp                                      \
   ../source/extra/sfen_packer.cpp                                      \
+  ../source/extra/super_sort.cpp                                       \
   ../source/mate/mate.cpp                                              \
   ../source/mate/mate1ply_without_effect.cpp                           \
   ../source/mate/mate1ply_with_effect.cpp                              \
@@ -192,13 +191,10 @@ LOCAL_SRC_FILES := \
   ../source/eval/evaluate_io.cpp                                       \
   ../source/eval/evaluate_mir_inv_tools.cpp                            \
   ../source/eval/material/evaluate_material.cpp                        \
+  ../source/testcmd/benchmark.cpp                                      \
   ../source/testcmd/mate_test_cmd.cpp                                  \
   ../source/testcmd/normal_test_cmd.cpp                                \
-  ../source/testcmd/unit_test.cpp                                      \
-  ../source/book/makebook.cpp                                          \
-  ../source/book/makebook2015.cpp                                      \
-  ../source/book/makebook2025.cpp
-
+  ../source/testcmd/unit_test.cpp
 
 ifeq ($(YANEURAOU_EDITION),YANEURAOU_ENGINE_KPPT)
 LOCAL_SRC_FILES += \
@@ -261,6 +257,14 @@ ifneq ($(ENGINE_NAME),)
 CPPFLAGS += -DENGINE_NAME_FROM_MAKEFILE=$(ENGINE_NAME)
 endif
 
+# cluster
+ifeq ($(YO_CLUSTER),ON)
+	LOCAL_SRC_FILES += \
+		../source/engine/yo-cluster/ProcessNegotiator.cpp                  \
+		../source/engine/yo-cluster/yo_cluster.cpp
+	CPPFLAGS += -DUSE_YO_CLUSTER
+endif
+
 # 開発用branch
 ifeq ($(findstring dev,$(ENGINE_BRANCH)),dev)
 CPPFLAGS += -DDEV_BRANCH
@@ -268,7 +272,7 @@ endif
 
 # abe
 ifeq ($(findstring abe,$(ENGINE_BRANCH)),abe)
-CPPFLAGS += -DPV_OUTPUT_DRAW_ONLY
+CPPFLAGS += -DPV_OUTPUT_DRAW_ONLY -DFORCE_BIND_THIS_THREAD
 endif
 
 

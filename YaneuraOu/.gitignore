@@ -17,8 +17,10 @@ YaneuraOu_backup*.lnk
 *.vspx
 *~
 ~*
-.*/
-!.github/
+.dl/
+.script/
+.vscode/
+docker/
 *.nnue
 *.nnue.*
 *.result.txt

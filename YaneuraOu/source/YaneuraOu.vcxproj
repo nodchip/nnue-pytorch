@@ -1,8 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\packages\Microsoft.ML.OnnxRuntime.1.23.0\build\native\Microsoft.ML.OnnxRuntime.props" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.1.23.0\build\native\Microsoft.ML.OnnxRuntime.props')" />
-  <Import Project="..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.23.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.23.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props')" />
-  <Import Project="..\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.props" Condition="Exists('..\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.props')" />
+  <Import Project="..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.props" Condition="('$(Configuration)'=='Debug-Deep-ORT-DML' Or '$(Configuration)'=='Release-Deep-ORT-DML') And Exists('..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.props')" />
+  <Import Project="..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.props" Condition="('$(Configuration)'=='Debug-Deep-ORT-CPU' Or '$(Configuration)'=='Release-Deep-ORT-CPU') And Exists('..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.props')" />
+  <Import Project="..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props" Condition="('$(Configuration)'=='Debug-Deep-ORT-DML' Or '$(Configuration)'=='Release-Deep-ORT-DML') And Exists('..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props')" />
+  <Import Project="..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.props" Condition="('$(Configuration)'=='Debug-Deep-ORT-TRT' Or '$(Configuration)'=='Release-Deep-ORT-TRT') And Exists('..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug-Deep-ORT-CPU|x64">
       <Configuration>Debug-Deep-ORT-CPU</Configuration>
@@ -344,24 +345,28 @@
     <Import Project="props\YaneuraOuSolution-debug-x64.props" />
     <Import Project="props\YaneuraOuCpu-x64-avx2.props" />
     <Import Project="props\YaneuraOuEdition-Deep-ORT-CPU.props" />
+    <Import Project="..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.targets" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.targets')" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug-Deep-ORT-DML|x64'" Label="PropertySheets">
     <Import Project="props\YaneuraOu-common.props" />
     <Import Project="props\YaneuraOuSolution-debug-x64.props" />
     <Import Project="props\YaneuraOuCpu-x64-avx2.props" />
     <Import Project="props\YaneuraOuEdition-Deep-ORT-DML.props" />
+    <Import Project="..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets')" />
+    <Import Project="..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.targets" Condition="Exists('..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.targets')" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug-Deep-ORT-TRT|x64'" Label="PropertySheets">
     <Import Project="props\YaneuraOu-common.props" />
     <Import Project="props\YaneuraOuSolution-debug-x64.props" />
     <Import Project="props\YaneuraOuCpu-x64-avx2.props" />
     <Import Project="props\YaneuraOuEdition-Deep-ORT-TRT.props" />
+    <Import Project="..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.targets" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.targets')" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug-Deep-TensorRT|x64'" Label="PropertySheets">
     <Import Project="props\YaneuraOu-common.props" />
     <Import Project="props\YaneuraOuSolution-debug-x64.props" />
     <Import Project="props\YaneuraOuCpu-x64-avx2.props" />
-    <Import Project="$(CUDA_PATH_V12_8)\extras\visual_studio_integration\MSBuildExtensions\CUDA 12.8.props" />
+    <Import Project="$(CUDA_PATH_V11_7)\extras\visual_studio_integration\MSBuildExtensions\CUDA 11.7.props" />
     <Import Project="props\YaneuraOuEdition-Deep-TensorRT.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release-Deep-ORT-CPU|x64'" Label="PropertySheets">
@@ -369,24 +374,28 @@
     <Import Project="props\YaneuraOuSolution-release-x64.props" />
     <Import Project="props\YaneuraOuCpu-x64-avx2.props" />
     <Import Project="props\YaneuraOuEdition-Deep-ORT-CPU.props" />
+    <Import Project="..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.targets" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.targets')" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release-Deep-ORT-DML|x64'" Label="PropertySheets">
     <Import Project="props\YaneuraOu-common.props" />
     <Import Project="props\YaneuraOuSolution-release-x64.props" />
     <Import Project="props\YaneuraOuCpu-x64-avx2.props" />
     <Import Project="props\YaneuraOuEdition-Deep-ORT-DML.props" />
+    <Import Project="..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets')" />
+    <Import Project="..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.targets" Condition="Exists('..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.targets')" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release-Deep-ORT-TRT|x64'" Label="PropertySheets">
     <Import Project="props\YaneuraOu-common.props" />
     <Import Project="props\YaneuraOuSolution-release-x64.props" />
     <Import Project="props\YaneuraOuCpu-x64-avx2.props" />
     <Import Project="props\YaneuraOuEdition-Deep-ORT-TRT.props" />
+    <Import Project="..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.targets" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.targets')" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release-Deep-TensorRT|x64'" Label="PropertySheets">
     <Import Project="props\YaneuraOu-common.props" />
     <Import Project="props\YaneuraOuSolution-release-x64.props" />
     <Import Project="props\YaneuraOuCpu-x64-avx2.props" />
-    <Import Project="$(CUDA_PATH_V12_8)\extras\visual_studio_integration\MSBuildExtensions\CUDA 12.8.props" />
+    <Import Project="$(CUDA_PATH_V11_7)\extras\visual_studio_integration\MSBuildExtensions\CUDA 11.7.props" />
     <Import Project="props\YaneuraOuEdition-Deep-TensorRT.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release-NNUE-LEARN|x64'" Label="PropertySheets">
@@ -450,7 +459,7 @@
     <ClCompile>
       <OpenMPSupport>
       </OpenMPSupport>
-      <PreprocessorDefinitions>USE_AVX2;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>USE_AVX2;USE_GENSFEN2018;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -472,7 +481,7 @@
     <ClCompile>
       <OpenMPSupport>
       </OpenMPSupport>
-      <PreprocessorDefinitions>USE_AVX2;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>USE_AVX2;USE_GENSFEN2018;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -572,27 +581,22 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalOptions>/source-charset:utf-8 /execution-charset:utf-8 %(AdditionalOptions)</AdditionalOptions>
-      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Debug-Deep-TensorRT|x64'">MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="benchmark.h" />
     <ClInclude Include="bitboard.h" />
     <ClInclude Include="book\apery_book.h" />
     <ClInclude Include="book\book.h" />
-    <ClInclude Include="book\policybook.h" />
     <ClInclude Include="config.h" />
-    <ClInclude Include="engine.h" />
-    <ClInclude Include="engine\dlshogi-engine\dlshogi_searcher.h" />
+    <ClInclude Include="engine\dlshogi-engine\dlshogi_min.h" />
     <ClInclude Include="engine\dlshogi-engine\dlshogi_types.h" />
-    <ClInclude Include="engine\dlshogi-engine\FukauraOuEngine.h" />
     <ClInclude Include="engine\dlshogi-engine\misc\fastmath.h" />
+    <ClInclude Include="engine\dlshogi-engine\dlshogi_searcher.h" />
     <ClInclude Include="engine\dlshogi-engine\Node.h" />
     <ClInclude Include="engine\dlshogi-engine\PrintInfo.h" />
-    <ClInclude Include="engine\dlshogi-engine\PvMateSearch.h" />
-    <ClInclude Include="engine\dlshogi-engine\SearchOptions.h" />
     <ClInclude Include="engine\dlshogi-engine\UctSearch.h" />
-    <ClInclude Include="engine\yaneuraou-engine\yaneuraou-search.h" />
+    <ClInclude Include="engine\yaneuraou-engine\yaneuraou-param.h" />
+    <ClInclude Include="engine\yo-cluster\ProcessNegotiator.h" />
     <ClInclude Include="evaluate.h" />
     <ClInclude Include="eval\deep\nn_types.h" />
     <ClInclude Include="eval\deep\nn.h" />
@@ -606,12 +610,9 @@
     <ClInclude Include="eval\kppt\evaluate_kppt.h" />
     <ClInclude Include="eval\kpp_kkpt\evaluate_kpp_kkpt.h" />
     <ClInclude Include="eval\nnue\architectures\halfkpe9_256x2-32-32.h" />
-    <ClInclude Include="eval\nnue\architectures\halfkp_1024x2-8-32.h" />
-    <ClInclude Include="eval\nnue\architectures\halfkp_1024x2-8-64.h" />
     <ClInclude Include="eval\nnue\architectures\halfkp_256x2-32-32.h" />
-    <ClInclude Include="eval\nnue\architectures\halfkp_512x2-16-32.h" />
-    <ClInclude Include="eval\nnue\architectures\halfkpvm_256x2-32-32.h" />
-    <ClInclude Include="eval\nnue\architectures\kp_256x2-32-32.h" />
+    <ClInclude Include="eval\nnue\architectures\halfkp_vm_256x2-32-32.h" />
+    <ClInclude Include="eval\nnue\architectures\k-p_256x2-32-32.h" />
     <ClInclude Include="eval\nnue\evaluate_nnue.h" />
     <ClInclude Include="eval\nnue\evaluate_nnue_learner.h" />
     <ClInclude Include="eval\nnue\features\features_common.h" />
@@ -625,10 +626,8 @@
     <ClInclude Include="eval\nnue\features\p.h" />
     <ClInclude Include="eval\nnue\features\pe9.h" />
     <ClInclude Include="eval\nnue\layers\affine_transform.h" />
-    <ClInclude Include="eval\nnue\layers\affine_transform_sparse_input.h" />
     <ClInclude Include="eval\nnue\layers\clipped_relu.h" />
     <ClInclude Include="eval\nnue\layers\input_slice.h" />
-    <ClInclude Include="eval\nnue\layers\simd.h" />
     <ClInclude Include="eval\nnue\layers\sum.h" />
     <ClInclude Include="eval\nnue\nnue_accumulator.h" />
     <ClInclude Include="eval\nnue\nnue_architecture.h" />
@@ -641,78 +640,51 @@
     <ClInclude Include="eval\nnue\trainer\features\factorizer_half_kpe9.h" />
     <ClInclude Include="eval\nnue\trainer\trainer.h" />
     <ClInclude Include="eval\nnue\trainer\trainer_affine_transform.h" />
-    <ClInclude Include="eval\nnue\trainer\trainer_affine_transform_sparse_input.h" />
     <ClInclude Include="eval\nnue\trainer\trainer_clipped_relu.h" />
     <ClInclude Include="eval\nnue\trainer\trainer_feature_transformer.h" />
     <ClInclude Include="eval\nnue\trainer\trainer_input_slice.h" />
     <ClInclude Include="eval\nnue\trainer\trainer_sum.h" />
-    <ClInclude Include="eval\sfnn\features\half_ka_v2_hm.h" />
-    <ClInclude Include="eval\sfnn\layers\affine_transform.h" />
-    <ClInclude Include="eval\sfnn\layers\affine_transform_sparse_input.h" />
-    <ClInclude Include="eval\sfnn\layers\clipped_relu.h" />
-    <ClInclude Include="eval\sfnn\layers\sqr_clipped_relu.h" />
-    <ClInclude Include="eval\sfnn\network.h" />
-    <ClInclude Include="eval\sfnn\nnue_accumulator.h" />
-    <ClInclude Include="eval\sfnn\nnue_architecture.h" />
-    <ClInclude Include="eval\sfnn\nnue_common.h" />
-    <ClInclude Include="eval\sfnn\nnue_feature_transformer.h" />
-    <ClInclude Include="eval\sfnn\nnue_misc.h" />
-    <ClInclude Include="eval\sfnn\simd.h" />
     <ClInclude Include="extra\all.h" />
     <ClInclude Include="extra\bitop.h" />
     <ClInclude Include="extra\key128.h" />
     <ClInclude Include="extra\long_effect.h" />
     <ClInclude Include="extra\macros.h" />
-    <ClInclude Include="history.h" />
     <ClInclude Include="learn\half_float.h" />
     <ClInclude Include="learn\learn.h" />
     <ClInclude Include="learn\learning_tools.h" />
     <ClInclude Include="learn\multi_think.h" />
     <ClInclude Include="mate\mate.h" />
     <ClInclude Include="mate\mate_move_picker.h" />
-    <ClInclude Include="memory.h" />
     <ClInclude Include="misc.h" />
-    <ClInclude Include="movegen.h" />
     <ClInclude Include="movepick.h" />
-    <ClInclude Include="numa.h" />
-    <ClInclude Include="perft.h" />
-    <ClInclude Include="score.h" />
-    <ClInclude Include="shm.h" />
-    <ClInclude Include="shm_linux.h" />
-    <ClInclude Include="timeman.h" />
-    <ClInclude Include="tracer.h" />
     <ClInclude Include="search.h" />
     <ClInclude Include="testcmd\unit_test.h" />
     <ClInclude Include="thread_win32_osx.h" />
-    <ClInclude Include="tune.h" />
     <ClInclude Include="types.h" />
     <ClInclude Include="position.h" />
     <ClInclude Include="thread.h" />
     <ClInclude Include="tt.h" />
     <ClInclude Include="usi.h" />
-    <ClInclude Include="usioption.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="benchmark.cpp" />
     <ClCompile Include="bitboard.cpp" />
     <ClCompile Include="book\apery_book.cpp" />
     <ClCompile Include="book\book.cpp" />
     <ClCompile Include="book\makebook.cpp" />
     <ClCompile Include="book\makebook2015.cpp" />
-    <ClCompile Include="book\makebook2025.cpp" />
-    <ClCompile Include="book\policybook.cpp" />
-    <ClCompile Include="engine.cpp" />
+    <ClCompile Include="book\makebook2019.cpp" />
+    <ClCompile Include="book\makebook2021.cpp" />
     <ClCompile Include="engine\dlshogi-engine\dlshogi_searcher.cpp" />
-    <ClCompile Include="engine\dlshogi-engine\FukauraOuEngine.cpp" />
-    <ClCompile Include="engine\dlshogi-engine\Node.cpp" />
     <ClCompile Include="engine\dlshogi-engine\PrintInfo.cpp" />
-    <ClCompile Include="engine\dlshogi-engine\PvMateSearch.cpp" />
-    <ClCompile Include="engine\dlshogi-engine\SearchOptions.cpp" />
     <ClCompile Include="engine\dlshogi-engine\UctSearch.cpp" />
+    <ClCompile Include="engine\dlshogi-engine\Node.cpp" />
+    <ClCompile Include="engine\dlshogi-engine\YaneuraOu_dlshogi_bridge.cpp" />
     <ClCompile Include="engine\tanuki-mate-engine\tanuki-mate-search.cpp" />
     <ClCompile Include="engine\user-engine\user-search.cpp" />
     <ClCompile Include="engine\yaneuraou-engine\yaneuraou-search.cpp" />
     <ClCompile Include="engine\yaneuraou-mate-engine\yaneuraou-mate-search.cpp" />
+    <ClCompile Include="engine\yo-cluster\ProcessNegotiator.cpp" />
+    <ClCompile Include="engine\yo-cluster\yo_cluster.cpp" />
     <ClCompile Include="eval\deep\nn_types.cpp" />
     <ClCompile Include="eval\deep\nn.cpp" />
     <ClCompile Include="eval\deep\nn_onnx_runtime.cpp" />
@@ -736,13 +708,10 @@
     <ClCompile Include="eval\nnue\features\p.cpp" />
     <ClCompile Include="eval\nnue\features\pe9.cpp" />
     <ClCompile Include="eval\nnue\nnue_test_command.cpp" />
-    <ClCompile Include="eval\sfnn\features\half_ka_v2_hm.cpp" />
-    <ClCompile Include="eval\sfnn\network.cpp" />
-    <ClCompile Include="eval\sfnn\nnue_accumulator.cpp" />
-    <ClCompile Include="eval\sfnn\nnue_misc.cpp" />
     <ClCompile Include="extra\bitop.cpp" />
     <ClCompile Include="extra\long_effect.cpp" />
     <ClCompile Include="extra\sfen_packer.cpp" />
+    <ClCompile Include="extra\super_sort.cpp" />
     <ClCompile Include="learn\learner.cpp" />
     <ClCompile Include="learn\learning_tools.cpp" />
     <ClCompile Include="learn\multi_think.cpp" />
@@ -752,23 +721,20 @@
     <ClCompile Include="mate\mate1ply_with_effect.cpp" />
     <ClCompile Include="mate\mate_dfpn.hpp" />
     <ClCompile Include="mate\mate_solver.cpp" />
-    <ClCompile Include="memory.cpp" />
     <ClCompile Include="misc.cpp" />
     <ClCompile Include="movegen.cpp" />
     <ClCompile Include="movepick.cpp" />
-    <ClCompile Include="score.cpp" />
-    <ClCompile Include="search.cpp" />
+    <ClCompile Include="testcmd\benchmark.cpp" />
     <ClCompile Include="testcmd\mate_test_cmd.cpp" />
     <ClCompile Include="testcmd\normal_test_cmd.cpp" />
     <ClCompile Include="testcmd\unit_test.cpp" />
     <ClCompile Include="timeman.cpp" />
-    <ClCompile Include="tune.cpp" />
     <ClCompile Include="types.cpp" />
     <ClCompile Include="position.cpp" />
     <ClCompile Include="thread.cpp" />
     <ClCompile Include="tt.cpp" />
     <ClCompile Include="usi.cpp" />
-    <ClCompile Include="usioption.cpp" />
+    <ClCompile Include="usi_option.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\script\readme.txt" />
@@ -777,6 +743,7 @@
     <None Include="..\.editorconfig" />
     <None Include="..\.gitattributes" />
     <None Include="..\.gitignore" />
+    <None Include="..\README.md" />
     <None Include="..\script\analyze_result_log.py" />
     <None Include="..\script\analyze_yane_log.py" />
     <None Include="..\script\bench.py" />
@@ -785,12 +752,11 @@
     <None Include="..\script\engine_invoker5.py" />
     <CustomBuild Include="eval\deep\unpack.cu">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release-Deep-TensorRT|x64'">"$(CUDA_PATH_V12_8)\bin\nvcc.exe" --use-local-env -ccbin "$(VC_ExecutablePath_x64)" -std=c++17 -x cu --keep-dir ..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget) -maxrregcount=0 --machine 64 --compile -cudart static -DNDEBUG -D_CONSOLE -D_UNICODE -DUNICODE -DYANEURAOU_ENGINE_DEEP -DTENSOR_RT -Xcompiler "/EHsc /W3 /nologo /O2 /Fd..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\vc143.pdb /FS /MT" -o "..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\%(Filename)%(Extension).obj" "%(FullPath)"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release-Deep-TensorRT|x64'">"$(CUDA_PATH_V11_7)\bin\nvcc.exe" --use-local-env -ccbin "$(VC_ExecutablePath_x64)" -std=c++17 -x cu --keep-dir ..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget) -maxrregcount=0 --machine 64 --compile -cudart static -DNDEBUG -D_CONSOLE -D_UNICODE -DUNICODE -DYANEURAOU_ENGINE_DEEP -DTENSOR_RT -Xcompiler "/EHsc /W3 /nologo /O2 /Fd..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\vc143.pdb /FS /MT" -o "..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\%(Filename)%(Extension).obj" "%(FullPath)"</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release-Deep-TensorRT|x64'">..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\%(Filename)%(Extension).obj</Outputs>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug-Deep-TensorRT|x64'">"$(CUDA_PATH_V12_8)\bin\nvcc.exe" --use-local-env -ccbin "$(VC_ExecutablePath_x64)" -std=c++17 -x cu -G --keep-dir ..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget) -maxrregcount=0 --machine 64 --compile -cudart static -g -D_DEBUG -D_CONSOLE -D_UNICODE -DUNICODE -DYANEURAOU_ENGINE_DEEP -DTENSOR_RT -Xcompiler "/EHsc /W3 /nologo /Od /Fd..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\vc143.pdb /FS /Zi /RTC1 /MTd" -o "..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\%(Filename)%(Extension).obj" "%(FullPath)"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug-Deep-TensorRT|x64'">"$(CUDA_PATH_V11_7)\bin\nvcc.exe" --use-local-env -ccbin "$(VC_ExecutablePath_x64)" -std=c++17 -x cu -G --keep-dir ..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget) -maxrregcount=0 --machine 64 --compile -cudart static -g -D_DEBUG -D_CONSOLE -D_UNICODE -DUNICODE -DYANEURAOU_ENGINE_DEEP -DTENSOR_RT -Xcompiler "/EHsc /W3 /nologo /Od /Fd..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\vc143.pdb /FS /Zi /RTC1 /MTd" -o "..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\%(Filename)%(Extension).obj" "%(FullPath)"</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug-Deep-TensorRT|x64'">..\$(Platform)\$(Configuration)\obj\$(YaneuraOuDbgPrefix)$(YaneuraOuCpuTarget)\%(Filename)%(Extension).obj</Outputs>
     </CustomBuild>
-    <None Include=".clang-format" />
     <None Include="Makefile" />
     <None Include="packages.config" />
     <ClInclude Include="eval\deep\unpack.cuh">
@@ -799,20 +765,19 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.targets" Condition="Exists('..\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.targets')" />
-    <Import Project="..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.23.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.23.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets')" />
-    <Import Project="..\packages\Microsoft.ML.OnnxRuntime.1.23.0\build\native\Microsoft.ML.OnnxRuntime.targets" Condition="Exists('..\packages\Microsoft.ML.OnnxRuntime.1.23.0\build\native\Microsoft.ML.OnnxRuntime.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>このプロジェクトは、このコンピューター上にない NuGet パッケージを参照しています。それらのパッケージをダウンロードするには、[NuGet パッケージの復元] を使用します。詳細については、http://go.microsoft.com/fwlink/?LinkID=322105 を参照してください。見つからないファイルは {0} です。</ErrorText>
     </PropertyGroup>
+    <Error Condition="!Exists('..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.AI.DirectML.1.8.2\build\Microsoft.AI.DirectML.targets'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.1.11.0\build\native\Microsoft.ML.OnnxRuntime.targets'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.11.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.props'))" />
+    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.Gpu.1.11.0\build\native\Microsoft.ML.OnnxRuntime.Gpu.targets'))" />
     <Error Condition="!Exists('..\packages\OpenBLAS.0.2.14.1\build\native\openblas.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\OpenBLAS.0.2.14.1\build\native\openblas.targets'))" />
-    <Error Condition="!Exists('..\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.props'))" />
-    <Error Condition="!Exists('..\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.targets'))" />
-    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.23.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.23.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props'))" />
-    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.23.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.DirectML.1.23.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets'))" />
-    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.1.23.0\build\native\Microsoft.ML.OnnxRuntime.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.1.23.0\build\native\Microsoft.ML.OnnxRuntime.props'))" />
-    <Error Condition="!Exists('..\packages\Microsoft.ML.OnnxRuntime.1.23.0\build\native\Microsoft.ML.OnnxRuntime.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.ML.OnnxRuntime.1.23.0\build\native\Microsoft.ML.OnnxRuntime.targets'))" />
   </Target>
 </Project>

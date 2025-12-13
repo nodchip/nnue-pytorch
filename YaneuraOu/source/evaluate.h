@@ -4,8 +4,6 @@
 #include "config.h"
 #include "types.h"
 
-#include <functional>
-
 // -------------------------------------
 //   評価関数に対応するheaderの読み込み
 // -------------------------------------
@@ -18,16 +16,15 @@
 //             評価関数
 // -------------------------------------
 
-namespace YaneuraOu {
 struct StateInfo;
 
 namespace Eval {
 
-#if defined(USE_CLASSIC_EVAL)
-	// 評価関数の初期化。これは起動直後に1度だけ呼び出される。
-	// 💡 引数で受け取ったoptionsを用いて、
-	//     評価関数に必要なエンジンオプションを追加することができる。
-	void add_options(OptionsMap& options, ThreadPool& threads);
+	// init()は評価関数の初期化。
+	// これは起動直後に1度だけ呼び出される。
+	// ただし、(探索部に対して) TUNING_SEARCH_PARAMETERS が defineされている時は、
+	// "isready"タイミングで毎回(探索部から)呼び出される。
+	void init();
 
 	// 駒割り以外の全計算して、その合計を返す。Position::set()で一度だけ呼び出される。
 	// あるいは差分計算が不可能なときに呼び出される。
@@ -37,20 +34,23 @@ namespace Eval {
 	// このあとのdo_move()のあとのevaluate()で差分計算ができるように、
 	// 現在の前局面から差分計算ができるときだけ計算しておく。
 	// 評価値自体は返さない。
-	// 備考) 差分計算型の評価関数ではないときは、この関数は何もしなくて良い。
 	void evaluate_with_no_return(const Position& pos);
 
 	// 評価値の内訳表示(デバッグ用)
 	void print_eval_stat(Position& pos);
 
-	// 評価関数パラメーターを読み込む。
+	// 評価関数ファイルを読み込む。
 	// 時間のかかる評価関数の初期化処理はここに書くこと。
-	// これは、"isready"コマンドの応答時に(毎回)呼び出される。
-	// ⚠ EvalDir(評価関数フォルダ)が変更になったあと、isreadyが再度送られてきたら読みなおす処理は自分で書くこと。
+	// これは、"is_ready"コマンドの応答時に1度だけ呼び出される。2度呼び出すことは想定していない。
+	// (ただし、EvalDir(評価関数フォルダ)が変更になったあと、isreadyが再度送られてきたら読みなおす。)
 	void load_eval();
 
 	// 評価関数本体
 	Value evaluate(const Position& pos);
+
+	// 駒割りを計算する。Position::set()から呼び出されて、以降do_move()では差分計算されるのでこの関数は呼び出されない。
+	Value material(const Position& pos);
+
 
 #if defined(EVAL_KPPT) || defined(EVAL_KPP_KKPT)
 	// 評価関数パラメーターのチェックサムを返す。
@@ -60,18 +60,10 @@ namespace Eval {
 	void print_softname(u64 check_sum);
 #else
 	static u64 calc_check_sum() { return 0; }
-	static void print_softname([[maybe_unused]] u64 check_sum) {}
+	static void print_softname(u64 check_sum) {}
 #endif
 
-#endif // defined(USE_CLASSIC_EVAL)
-
-
 #if defined (USE_PIECE_VALUE)
-
-    // 駒割りを計算する。
-	// 💡 この関数は、classic evalでなくとも用いることがある。(例えば、dfpnのMovePickerでmaterialに従ってorderingする場合など)
-	// 📝 Position::set()から呼び出されて、以降do_move()では差分計算されるのでこの関数は呼び出されない。
-    Value material(const Position& pos);
 
 	// Apery(WCSC26)の駒割り
 	enum {
@@ -91,39 +83,18 @@ namespace Eval {
 		KingValue = 15000,
 	};
 
-	// 駒の価値のテーブル
-	// ⚠ 後手の駒に対してもプラスの値が返る。
+	// 駒の価値のテーブル(後手の駒は負の値)
 	extern int PieceValue[PIECE_NB];
-
-	// 駒の価値、駒割計算用
-	// ⚠ 後手の駒が負の値
-    extern int PieceValueM[PIECE_NB];
 
 	// 駒の交換値(＝捕獲したときの価値の上昇値)
 	// 例)「と」を取ったとき、評価値の変動量は手駒歩+盤面の「と」。
 	// MovePickerとSEEの計算で用いる。
-	// ⚠  後手の駒に対してもプラスの値が返る。
 	extern int CapturePieceValue[PIECE_NB];
 
 	// 駒を成ったときの成る前との価値の差。SEEで用いる。
 	// 駒の成ったものと成っていないものとの価値の差
-	// 💡　PAWNでもPRO_PAWNでも　と金 - 歩 の価値が返る。
-	// ⚠  後手の駒に対してもプラスの値が返る。
+	// ※　PAWNでもPRO_PAWNでも　と金 - 歩 の価値が返る。
 	extern int ProDiffPieceValue[PIECE_NB];
-
-	// 指し手moveによってtoの地点の駒が捕獲できることがわかっている時の、駒を捕獲する価値
-	// moveが成りの指し手である場合、その価値も上乗せして計算する。
-	// ※　move.to_sq()に駒がない場合もこの関数の呼び出しは合法。(VALUE_NONEが返る)
-	// ⚠  後手の駒に対してもプラスの値が返る。
-	Value CapturePieceValuePlusPromote(const Position& pos, Move move);
-
-#else
-
-	// 📝 cpに変換する時に必要なのでPawnValueだけは定義しておく。
-	enum {
-		PawnValue = 90
-	};
-
 #endif
 
 
@@ -407,14 +378,12 @@ namespace Eval {
 
 #if defined(USE_EVAL_HASH)
 	// EvalHashのリサイズ
-	void EvalHash_Resize(size_t mbSize);
+	extern void EvalHash_Resize(size_t mbSize);
 
 	// EvalHashのクリア
-	void EvalHash_Clear();
+	extern void EvalHash_Clear();
 #endif
 
-
-} // namespace Eval
-} // namespace YaneuraOu
+}
 
 #endif // #ifndef _EVALUATE_H_

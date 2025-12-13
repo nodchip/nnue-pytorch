@@ -2,11 +2,9 @@
 #if defined(YANEURAOU_ENGINE_DEEP)
 #include "../../misc.h"
 
-namespace dlshogi {
-
+namespace dlshogi
+{
 	// --- struct Node
-
-	std::mutex Node::mtx_dfpn;
 
 	// 引数のmoveで指定した子ノード以外の子ノードをすべて開放する。
 	// 前回探索した局面からmoveの指し手を選んだ局面の以外の情報を開放するのに用いる。
@@ -14,14 +12,11 @@ namespace dlshogi {
 	{
 		if (child_num > 0 && child_nodes) {
 			bool found = false;
-
 			for (int i = 0; i < child_num; ++i)
 			{
 				auto& uct_child  = child[i];
 				auto& child_node = child_nodes[i];
-                if (uct_child.move == move)
-					// ⚠ 上位bitが立っているなら、展開されていないNodeである可能性があるから再利用してはならない。
-                {
+				if (uct_child.move == move) {
 					found = true;
 					// 子ノードへのedgeは見つかっているけど実体がまだ。
 					if (!child_node)
@@ -103,9 +98,9 @@ namespace dlshogi {
 		for (const auto& move : moves) {
 			// 一つ前のnode
 			prev_head = current_head;
-			
+
 			// 現在の局面に到達する経路だけを残して他のノードを開放する。(なければNodeを作るのでnullptrになることはない)
-			current_head = current_head->ReleaseChildrenExceptOne(gc, move);
+			current_head = current_head->ReleaseChildrenExceptOne(gc,move);
 			
 			// 途中でold_headが見つかったならseen_old_headをtrueに。
 			// ここを超えて進んだなら、前回の探索結果が使える。
@@ -146,6 +141,6 @@ namespace dlshogi {
 		current_head = game_root_node.get();
 	}
 
-} // namespace dlshogi
+}
 
 #endif // defined(YANEURAOU_ENGINE_DEEP)

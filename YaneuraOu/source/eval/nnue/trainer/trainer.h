@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の学習用クラステンプレートの共通ヘッダ
 
-#ifndef CLASSIC_NNUE_TRAINER_H
-#define CLASSIC_NNUE_TRAINER_H
+#ifndef _NNUE_TRAINER_H_
+#define _NNUE_TRAINER_H_
 
 #include "../../../config.h"
 
@@ -11,14 +11,14 @@
 #include "../features/index_list.h"
 
 #include <sstream>
-
 #if defined(USE_BLAS)
-static_assert(std::is_same<YaneuraOu::LearnFloatType, float>::value, "");
+static_assert(std::is_same<LearnFloatType, float>::value, "");
 #include <cblas.h>
 #endif
 
-namespace YaneuraOu {
-namespace Eval::NNUE {
+namespace Eval {
+
+namespace NNUE {
 
 // 評価値と勝率の関係式で用いるPonanza定数
 constexpr double kPonanzaConstant = 600.0;
@@ -116,16 +116,20 @@ std::shared_ptr<T> MakeAlignedSharedPtr(ArgumentTypes&&... arguments) {
 
     // Trainerクラスのほうでゼロ初期化するのでここではゼロ初期化はされていないメモリで良い。
 
-	void* ptr_ = aligned_large_pages_alloc(sizeof(T));
+    void* ptr_ = LargeMemory::static_alloc(sizeof(T), alignof(T));
     const auto ptr = new(ptr_)
         T(std::forward<ArgumentTypes>(arguments)...);
+	LargeMemoryDeleter<T> deleter;
 
-    return std::shared_ptr<T>(ptr, LargePageDeleter<T>());
+    //sync_cout << "trainer.alloc(" << sizeof(T) << "," << alignof(T) << ")" << sync_endl;
+
+    return std::shared_ptr<T>(ptr,deleter);
 
 }
 
-} // namespace Eval::NNUE
-} // namespace YaneuraOu
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_LEARN) && defined(EVAL_NNUE)
 

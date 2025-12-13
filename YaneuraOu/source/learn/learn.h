@@ -6,9 +6,6 @@
 #if defined(EVAL_LEARN)
 
 #include <vector>
-#include "../position.h"
-
-namespace YaneuraOu {
 
 // =====================
 //  学習時の設定
@@ -189,6 +186,7 @@ typedef float LearnFloatType;
 // ----------------------
 // Learnerで用いるstructの定義
 // ----------------------
+#include "../position.h"
 
 namespace Learner
 {
@@ -225,19 +223,17 @@ namespace Learner
 
 	// 読み筋とそのときの評価値を返す型
 	// Learner::search() , Learner::qsearch()で用いる。
-	typedef std::pair<Value, std::vector<Move> > ValuePV;
+	typedef std::pair<Value, std::vector<Move> > ValueAndPV;
 
 	// いまのところ、YANEURAOU_ENGINEしか、このスタブを持っていないが
 	// EVAL_LEARNをdefineするなら、このスタブが必須。
-	Learner::ValuePV  search(Position& pos, int depth , size_t multiPV = 1 , u64 NodesLimit = 0);
-	Learner::ValuePV qsearch(Position& pos);
+	extern Learner::ValueAndPV  search(Position& pos, int depth , size_t multiPV = 1 , u64 NodesLimit = 0);
+	extern Learner::ValueAndPV qsearch(Position& pos);
 
 	double calc_grad(Value shallow, const PackedSfenValue& psv);
 
 }
 
-} // namespace YaneuraOu
-
-#endif // if defined(EVAL_LEARN)
+#endif
 
 #endif // ifndef _LEARN_H_

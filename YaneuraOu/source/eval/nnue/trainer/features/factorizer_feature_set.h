@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の特徴量変換クラステンプレートのFeatureSet用特殊化
 
-#ifndef CLASSIC_NNUE_TRAINER_FEATURES_FACTORIZER_FEATURE_SET_H
-#define CLASSIC_NNUE_TRAINER_FEATURES_FACTORIZER_FEATURE_SET_H
+#ifndef _NNUE_TRAINER_FEATURES_FACTORIZER_FEATURE_SET_H_
+#define _NNUE_TRAINER_FEATURES_FACTORIZER_FEATURE_SET_H_
 
 #include "../../../../config.h"
 
@@ -10,8 +10,11 @@
 #include "../../features/feature_set.h"
 #include "factorizer.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE::Features {
+namespace Eval {
+
+namespace NNUE {
+
+namespace Features {
 
 // 入力特徴量を学習用特徴量に変換するクラステンプレート
 // FeatureSet用特殊化
@@ -92,9 +95,11 @@ public:
   }
 };
 
-} // namespace Eval::NNUE::Features
-} // namespace YaneuraOu
+}  // namespace Features
 
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_NNUE)
 

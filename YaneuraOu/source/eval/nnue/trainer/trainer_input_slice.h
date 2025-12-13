@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の学習クラステンプレートのInputSlice用特殊化
 
-#ifndef CLASSIC_NNUE_TRAINER_INPUT_SLICE_H
-#define CLASSIC_NNUE_TRAINER_INPUT_SLICE_H
+#ifndef _NNUE_TRAINER_INPUT_SLICE_H_
+#define _NNUE_TRAINER_INPUT_SLICE_H_
 
 #include "../../../config.h"
 
@@ -11,8 +11,9 @@
 #include "../layers/input_slice.h"
 #include "trainer.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE {
+namespace Eval {
+
+namespace NNUE {
 
 // 学習：入力層
 class SharedInputTrainer {
@@ -246,8 +247,9 @@ class Trainer<Layers::InputSlice<OutputDimensions, Offset>> {
   std::vector<LearnFloatType> gradients_;
 };
 
-} // namespace Eval::NNUE
-} // namespace YaneuraOu
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_LEARN) && defined(EVAL_NNUE)
 

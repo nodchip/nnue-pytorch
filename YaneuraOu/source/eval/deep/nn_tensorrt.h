@@ -16,8 +16,6 @@
 
 #include "nn.h"
 
-namespace YaneuraOu {
-
 // CUDA APIの返し値のエラーチェックを行うヘルパ
 // エラーが発生すれば、その旨を出力して終了する。
 void checkCudaErrors(cudaError_t status);
@@ -79,6 +77,9 @@ namespace Eval::dlshogi
 		NN_Output_Policy* y1_dev;
 		NN_Output_Value * y2_dev;
 
+		// x1_dev,x2_dev,y1_dev,y2_devをひとまとめにしたもの。
+		std::vector<void*> infer_inputBindings;
+
 		// ↑で確保されたメモリを開放する。
 		void release();
 
@@ -102,7 +103,6 @@ namespace Eval::dlshogi
 	};
 
 } // namespace Eval::dlshogi
-} // namespace YaneuraOu
 
 #endif // defined(YANEURAOU_ENGINE_DEEP) && defined(TENSOR_RT)
 #endif // ndef __NN_TENSORRT_H_INCLUDED__

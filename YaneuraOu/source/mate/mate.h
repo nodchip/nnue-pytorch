@@ -1,5 +1,5 @@
-﻿#ifndef MATE_H_INCLUDED
-#define MATE_H_INCLUDED
+﻿#ifndef __MATE_H_INCLUDED__
+#define __MATE_H_INCLUDED__
 
 #include "../types.h"
 #if defined (USE_MATE_1PLY)
@@ -8,12 +8,8 @@
 #include <memory> // std::unique_ptr<>
 #include <atomic> // std::atomic<>
 
-#include "../thread.h"
-
-namespace YaneuraOu {
-
-namespace Mate {
-
+namespace Mate
+{
 	// Mate関連で使うテーブルの初期化
 	// ※　Bitboard::init()から呼び出される。
 	void init();
@@ -96,7 +92,7 @@ namespace Mate {
 
 		// その時の最善手のgetterとsetter
 		Move get_move() const { return (Move)(move16 + (move8 << 16)); }
-		void set_move(Move move) { move16 = move.to_u16(); move8 = move.to_u32() >> 16; }
+		void set_move(Move move) { move16 = (u16)move; move8 = move >> 16; }
 
 		// このEntryに格納されている手駒のgetter
 		// save()する時に指定した手駒が返る。
@@ -142,7 +138,7 @@ namespace Mate {
 		// 与えられたboard_keyを持つMateHashEntryの先頭アドレスを返す。
 		// (現状、1つしか該当するエントリーはない)
 		// 取得したあと、lock()～unlock()して用いること。
-		MateHashEntry* first_entry(const Key board_key, Color side_to_move) const;
+		MateHashEntry* first_entry(const Key board_key) const;
 
 		// 置換表のサイズを変更する。mbSize == 確保するメモリサイズ。MB単位。
 		// このあと呼び出し側でclear()を呼び出す必要がある。
@@ -150,7 +146,7 @@ namespace Mate {
 
 		// 置換表のエントリーの全クリア
 		// 連続対局の時はクリアしなくともいいような気はするが…。
-		void clear(ThreadPool& threads);
+		void clear();
 
 	private:
 		// 置換表の先頭アドレス
@@ -222,7 +218,7 @@ namespace Mate {
 		int max_game_ply = 0;
 	};
 
-#endif // defined(USE_MATE_SOLVER)
+#endif
 }
 
 #if defined(USE_MATE_DFPN)
@@ -273,10 +269,6 @@ namespace Mate::Dfpn
 		// 解けた時に今回の詰み手数を取得する。
 		virtual int get_mate_ply() const= 0;
 
-		// 探索を終了させる。
-		// これで停止させる場合は、次回、明示的に dfpn_stop(false);としてから詰み探索を呼び出す必要がある。
-		virtual void dfpn_stop(const bool stop) { this->stop = stop; };
-
 		// mate_dfpn()でMOVE_NONE以外が返ってきた時にメモリが不足しているかを返す。
 		virtual bool is_out_of_memory() const= 0;
 
@@ -284,10 +276,6 @@ namespace Mate::Dfpn
 		virtual int hashfull() const = 0;
 
 		virtual ~MateDfpnSolverInterface() {}
-
-	protected:
-		// 停止フラグ。これがtrueになると停止する。
-		bool stop = false;
 	};
 
 	// DfpnのSolverの種類
@@ -313,7 +301,7 @@ namespace Mate::Dfpn
 	};
 
 	// MateDfpnSolverInterfaceの入れ物。
-	class MateDfpnSolver : public MateDfpnSolverInterface
+	class MateDfpnSolver : MateDfpnSolverInterface
 	{
 	public:
 		MateDfpnSolver(DfpnSolverType t);
@@ -370,9 +358,10 @@ namespace Mate::Dfpn
 	};
 
 } // namespace Mate::Dfpn
-#endif // defined(USE_MATE_DFPN)
+#endif
 
-} // namespace YaneuraOu
-#endif // defined (USE_MATE_1PLY)
 
-#endif // MATE_H_INCLUDED
+#endif // namespace Mate
+
+#endif // __MATE_H_INCLUDED__
+

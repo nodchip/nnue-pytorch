@@ -1,7 +1,7 @@
 ﻿// NNUE評価関数の特徴量変換クラステンプレート
 
-#ifndef CLASSIC_NNUE_TRAINER_FEATURES_FACTORIZER_H
-#define CLASSIC_NNUE_TRAINER_FEATURES_FACTORIZER_H
+#ifndef _NNUE_TRAINER_FEATURES_FACTORIZER_H_
+#define _NNUE_TRAINER_FEATURES_FACTORIZER_H_
 
 #include "../../../../config.h"
 
@@ -10,8 +10,11 @@
 #include "../../nnue_common.h"
 #include "../trainer.h"
 
-namespace YaneuraOu {
-namespace Eval::NNUE::Features {
+namespace Eval {
+
+namespace NNUE {
+
+namespace Features {
 
 // 入力特徴量を学習用特徴量に変換するクラステンプレート
 // デフォルトでは学習用特徴量は元の入力特徴量と同じとし、必要に応じて特殊化する
@@ -98,8 +101,11 @@ constexpr std::size_t GetArrayLength(const T (&/*array*/)[N]) {
   return N;
 }
 
-} // namespace Eval::NNUE::Features
-} // namespace YaneuraOu
+}  // namespace Features
+
+}  // namespace NNUE
+
+}  // namespace Eval
 
 #endif  // defined(EVAL_NNUE)
 

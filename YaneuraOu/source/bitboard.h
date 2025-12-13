@@ -3,14 +3,10 @@
 
 #include "types.h"
 
-namespace YaneuraOu {
-
-class Engine;
-
 namespace Bitboards
 {
 	// Bitboard関連のテーブル初期化のための関数
-	void init();
+	extern void init();
 }
 
 // --------------------
@@ -263,7 +259,7 @@ struct alignas(16) Bitboard
 	}
 
 	// UnitTest
-	static void UnitTest(Test::UnitTester& tester, IEngine& engine);
+	static void UnitTest(Test::UnitTester&);
 };
 
 // 抑制していた警告を元に戻す。
@@ -287,10 +283,8 @@ template <int n>
 inline Bitboard& Bitboard::insert64(u64 u)
 {
 	static_assert(n == 0 || n == 1, "");
-#if defined(USE_SSE41) && defined(IS_64BIT)
+#if defined(USE_SSE41)
 	m = _mm_insert_epi64(m, u, n);
-	// ⇨ gcc/clangだと32bit環境で、この命令が定義されていなくてコンパイルエラーになる。
-	//		コンパイラ側のバグっぽい。仕方ないので、この命令を使うのは64bit環境の時のみにする。
 #else
 	p[n] = u;
 #endif
@@ -298,20 +292,20 @@ inline Bitboard& Bitboard::insert64(u64 u)
 }
 
 // Square型との演算子
-Bitboard operator|(const Bitboard& b, Square s);
-Bitboard operator&(const Bitboard& b, Square s);
-Bitboard operator^(const Bitboard& b, Square s);
+extern Bitboard operator|(const Bitboard& b, Square s);
+extern Bitboard operator&(const Bitboard& b, Square s);
+extern Bitboard operator^(const Bitboard& b, Square s);
 
 // 単項演算子
 // →　NOTで書くと、使っていないbit(p[0]のbit63)がおかしくなるのでALL_BBでxorしないといけない。
-Bitboard operator ~ (const Bitboard& a);
+extern Bitboard operator ~ (const Bitboard& a);
 
 // range-forで回せるようにするためのhack(少し遅いので速度が要求されるところでは使わないこと)
-const Bitboard begin(const Bitboard& b);
-const Bitboard end(const Bitboard&);
+extern const Bitboard begin(const Bitboard& b);
+extern const Bitboard end(const Bitboard&);
 
 // Bitboardの1の升を'*'、0の升を'.'として表示する。デバッグ用。
-std::ostream& operator<<(std::ostream& os, const Bitboard& board);
+extern std::ostream& operator<<(std::ostream& os, const Bitboard& board);
 
 // --------------------
 //     Bitboard256
@@ -426,7 +420,7 @@ struct alignas(32) Bitboard256
 	Bitboard merge() const;
 
 	// UnitTest
-	static void UnitTest(Test::UnitTester& tester, IEngine& engine);
+	static void UnitTest(Test::UnitTester&);
 };
 
 inline bool Bitboard256::operator == (const Bitboard256& rhs) const
@@ -501,7 +495,7 @@ static const Bitboard rank_bb(Rank r) { return BB_Table::RANK_BB[r]; }
 namespace BB_Table { extern const Bitboard ForwardRanksBB[COLOR_NB][RANK_NB]; }
 
 // 先手から見て1段目からr段目までを表現するBB(US==WHITEなら、9段目から数える)
-static const Bitboard rank1_n_bb(Color US, const Rank r)
+inline const Bitboard rank1_n_bb(Color US, const Rank r)
 {
 	ASSERT_LV2(is_ok(r));
 	return BB_Table::ForwardRanksBB[US][(US == BLACK ? r + 1 : 7 - r)];
@@ -509,7 +503,7 @@ static const Bitboard rank1_n_bb(Color US, const Rank r)
 
 // 敵陣を表現するBitboard。
 namespace BB_Table { extern const Bitboard EnemyField[COLOR_NB]; }
-static const Bitboard enemy_field(Color Us) { return BB_Table::EnemyField[Us]; }
+inline const Bitboard enemy_field(Color Us) { return BB_Table::EnemyField[Us]; }
 
 // 2升に挟まれている升を返すためのテーブル(その2升は含まない)
 // この配列には直接アクセスせずにbetween_bb()を使うこと。
@@ -520,7 +514,7 @@ namespace BB_Table {
 }
 
 // 2升に挟まれている升を表すBitboardを返す。sq1とsq2が縦横斜めの関係にないときはBitboard(ZERO)が返る。
-static const Bitboard between_bb(Square sq1, Square sq2) { return BB_Table::BetweenBB[BB_Table::BetweenIndex[sq1][sq2]]; }
+inline const Bitboard between_bb(Square sq1, Square sq2) { return BB_Table::BetweenBB[BB_Table::BetweenIndex[sq1][sq2]]; }
 
 // 2升を通過する直線を返すためのテーブル
 // 2つ目のindexは[0]:右上から左下、[1]:横方向、[2]:左上から右下、[3]:縦方向の直線。
@@ -528,7 +522,7 @@ static const Bitboard between_bb(Square sq1, Square sq2) { return BB_Table::Betw
 namespace BB_Table { extern Bitboard LineBB[SQ_NB][4]; }
 
 // 2升を通過する直線を返すためのBitboardを返す。sq1とsq2が縦横斜めの関係にないときに呼び出してはならない。
-static const Bitboard line_bb(Square sq1, Square sq2)
+inline const Bitboard line_bb(Square sq1, Square sq2)
 {
 	static_assert(Effect8::DIRECT_RU == 0 && Effect8::DIRECT_LD == 7 , "");
 	auto directions = Effect8::directions_of(sq1, sq2);
@@ -539,7 +533,7 @@ static const Bitboard line_bb(Square sq1, Square sq2)
 
 #if 0
 // →　高速化のために、Effect8::directions_ofを使って実装しているのでコメントアウト。(shogi.hにおいて)
-static bool aligned(Square s1, Square s2, Square s3) {
+inline bool aligned(Square s1, Square s2, Square s3) {
 	return LineBB[s1][s2] & s3;
 }
 #endif
@@ -551,7 +545,7 @@ namespace BB_Table { extern Bitboard CheckCandidateBB[SQ_NB_PLUS1][KING - 1][COL
 // sqの升にいる敵玉に王手となるus側の駒ptの候補を得る
 // pr == ROOKは無条件全域なので代わりにHORSEで王手になる領域を返す。
 // pr == KINGで呼び出してはならない。それは、around24_bb()のほうを用いる。
-static const Bitboard check_candidate_bb(Color us, PieceType pr, Square sq)
+inline const Bitboard check_candidate_bb(Color us, PieceType pr, Square sq)
 {
 	ASSERT_LV3(PAWN<= pr && pr < KING && sq <= SQ_NB && is_ok(us));
 	return BB_Table::CheckCandidateBB[sq][pr - 1][us];
@@ -562,7 +556,7 @@ static const Bitboard check_candidate_bb(Color us, PieceType pr, Square sq)
 namespace BB_Table { extern Bitboard CheckCandidateKingBB[SQ_NB_PLUS1]; }
 
 // ある升の24近傍のBitboardを返す。
-static const Bitboard around24_bb(Square sq)
+inline const Bitboard around24_bb(Square sq)
 {
 	ASSERT_LV3(sq <= SQ_NB);
 	return BB_Table::CheckCandidateKingBB[sq];
@@ -576,7 +570,7 @@ static const Bitboard around24_bb(Square sq)
 // C == BLACKの時は、1段目は0(歩が打てないから)、
 // C == WHITEの時は、9段目は0(歩が打てないから)を保証する。
 template <Color C>
-static Bitboard pawn_drop_mask(const Bitboard& pawns) {
+inline Bitboard pawn_drop_mask(const Bitboard& pawns) {
 	// Quigy[WCSC31]の手法 : cf. https://www.apply.computer-shogi.org/wcsc31/appeal/Qugiy/appeal.pdf
 
 	const Bitboard left(0x4020100804020100ULL, 0x0000000000020100ULL);
@@ -918,16 +912,21 @@ inline Bitboard lanceEffect(Square sq, const Bitboard& occupied)
 			// 香がp[0]に属する
 			u64 se = lanceStepEffect<C>(sq).template extract64<0>();
 			u64 mocc = se & occupied.extract64<0>();
-			// 香が当たる駒より上の升に対応するビットを0、それ以外を1にする
-			mocc = ~uint64_t{0} << MSB64(mocc | 1);
-			return Bitboard(mocc & se, 0);
+			mocc |= mocc >> 1;
+			mocc |= mocc >> 2;
+			mocc |= mocc >> 4;
+			mocc >>= 1;
+			return Bitboard(~mocc & se, 0);
 		}
 		else {
 			// 香がp[1]に属する
 			u64 se = lanceStepEffect<C>(sq).template extract64<1>();
 			u64 mocc = se & occupied.extract64<1>();
-			mocc = ~uint64_t{0} << MSB64(mocc | 1);
-			return Bitboard(0, mocc & se);
+			mocc |= mocc >> 1;
+			mocc |= mocc >> 2;
+			mocc |= mocc >> 4;
+			mocc >>= 1;
+			return Bitboard(0, ~mocc & se);
 		}
 	}
 #endif
@@ -957,10 +956,13 @@ inline Bitboard rookFileEffect(Square sq, const Bitboard& occupied)
 		// 先手の香の利き
 		u64 se = lanceStepEffect<BLACK>(sq).template extract64<0>();
 		u64 mocc = se & occupied.extract64<0>();
-		mocc = ~uint64_t{0} << MSB64(mocc | 1);
+		mocc |= mocc >> 1;
+		mocc |= mocc >> 2;
+		mocc |= mocc >> 4;
+		mocc >>= 1;
 
 		// 後手の香の利きと先手の香の利きを合成
-		return Bitboard(((em ^ t) & mask) | (mocc & se), 0);
+		return Bitboard((em ^ t) & mask | (~mocc & se), 0);
 	}
 	else {
 		// 飛車がp[1]に属する
@@ -972,16 +974,19 @@ inline Bitboard rookFileEffect(Square sq, const Bitboard& occupied)
 
 		u64 se = lanceStepEffect<BLACK>(sq).template extract64<1>();
 		u64 mocc = se & occupied.extract64<1>();
-		mocc = ~uint64_t{0} << MSB64(mocc | 1);
+		mocc |= mocc >> 1;
+		mocc |= mocc >> 2;
+		mocc |= mocc >> 4;
+		mocc >>= 1;
 
-		return Bitboard(0, ((em ^ t) & mask) | (mocc & se));
+		return Bitboard(0, (em ^ t) & mask | (~mocc & se));
 	}
 }
 
 // ==== 飛車と角の利き ===
 
 // 飛車の横の利き
-Bitboard rookRankEffect(Square sq, const Bitboard& occupied);
+extern Bitboard rookRankEffect(Square sq, const Bitboard& occupied);
 
 // 飛車の利き
 inline Bitboard rookEffect(const Square sq, const Bitboard& occupied) {
@@ -990,7 +995,7 @@ inline Bitboard rookEffect(const Square sq, const Bitboard& occupied) {
 }
 
 // 角の利き
-Bitboard bishopEffect(const Square sq, const Bitboard& occupied);
+extern Bitboard bishopEffect(const Square sq, const Bitboard& occupied);
 
 // 馬の利き
 inline Bitboard horseEffect(Square sq, const Bitboard& occupied)
@@ -1055,7 +1060,7 @@ Bitboard rayEffect(Square sq, const Bitboard& occupied)
 }
 
 // sqの升から指定した方向dへの利き。盤上の駒も考慮する。
-Bitboard directEffect(Square sq, Effect8::Direct d, const Bitboard& occupied);
+extern Bitboard directEffect(Square sq, Effect8::Direct d, const Bitboard& occupied);
 
 // --------------------
 //   汎用性のある利き
@@ -1063,11 +1068,11 @@ Bitboard directEffect(Square sq, Effect8::Direct d, const Bitboard& occupied);
 
 // 盤上sqに駒pc(先後の区別あり)を置いたときの利き。(step effect)
 // pc == QUEENだと馬+龍の利きが返る。盤上には駒は何もないものとして考える。
-Bitboard effects_from(Piece pc, Square sq);
+extern Bitboard effects_from(Piece pc, Square sq);
 
 // 盤上sqに駒pc(先後の区別あり)を置いたときの利き。
 // pc == QUEENだと馬+龍の利きが返る。
-Bitboard effects_from(Piece pc, Square sq, const Bitboard& occ);
+extern Bitboard effects_from(Piece pc, Square sq, const Bitboard& occ);
 
 // --------------------
 //   Stockfishとの互換性のために用意
@@ -1118,107 +1123,5 @@ inline Bitboard attacks_bb(Square s, Bitboard occupied) {
 	return effects_from(PC, s, occupied);
 }
 
-
-
-
-// Returns the least significant bit in a non-zero bitboard.
-// 0でないビットボードにおける最下位ビットを返す。
-// 📝 Stockfishとの互換性のために用意
-#if STOCKFISH
-inline Square lsb(Bitboard b) {
-#else
-inline int8_t lsb(uint64_t b) {
-#endif
-	assert(b);
-
-#if defined(__GNUC__)  // GCC, Clang, ICX
-
-    return int8_t(__builtin_ctzll(b));
-
-#elif defined(_MSC_VER)
-    #ifdef _WIN64  // MSVC, WIN64
-
-    unsigned long idx;
-    _BitScanForward64(&idx, b);
-    return int8_t(idx);
-
-    #else  // MSVC, WIN32
-    unsigned long idx;
-
-    if (b & 0xffffffff)
-    {
-        _BitScanForward(&idx, int32_t(b));
-        return int8_t(idx);
-    }
-    else
-    {
-        _BitScanForward(&idx, int32_t(b >> 32));
-        return int8_t(idx + 32);
-    }
-    #endif
-#else  // Compiler is neither GCC nor MSVC compatible
-    #error "Compiler not supported."
-#endif
-}
-
-// Returns the most significant bit in a non-zero bitboard.
-// 0でないビットボードにおける最上位ビットを返す。
-// 📝 Stockfishとの互換性のために用意
-#if STOCKFISH
-inline Square msb(Bitboard b) {
-#else
-inline int8_t msb(uint64_t b) {
-#endif
-    assert(b);
-
-#if defined(__GNUC__)  // GCC, Clang, ICX
-
-    return int8_t(63 ^ __builtin_clzll(b));
-
-#elif defined(_MSC_VER)
-    #ifdef _WIN64  // MSVC, WIN64
-
-    unsigned long idx;
-    _BitScanReverse64(&idx, b);
-    return int8_t(idx);
-
-    #else  // MSVC, WIN32
-
-    unsigned long idx;
-
-    if (b >> 32)
-    {
-        _BitScanReverse(&idx, int32_t(b >> 32));
-        return int8_t(idx + 32);
-    }
-    else
-    {
-        _BitScanReverse(&idx, int32_t(b));
-        return int8_t(idx);
-    }
-    #endif
-#else  // Compiler is neither GCC nor MSVC compatible
-    #error "Compiler not supported."
-#endif
-}
-
-
-/// least_significant_square_bb() returns the bitboard of the least significant
-/// square of a non-zero bitboard. It is equivalent to square_bb(lsb(bb)).
-
-// pop_lsb()の、Bitboardを返す版。
-// ※　Stockfishとの互換性のために用意。
-
-inline Bitboard least_significant_square_bb(Bitboard b) {
-	//return b & -b;
-	// →　Stockfishはチェスが64升だから盤面のBitboardが64bit整数に収まるのだが、
-	//    やねうら王では一工夫必要。
-
-	u64 q0 = b.extract64<0>();
-	u64 q1 = b.extract64<1>();
-	return (q0 != 0) ? Bitboard(q0 & -q0 , 0) : Bitboard(0, q1 & -q1);
-}
-
-} // namespace YaneuraOu
 
 #endif // #ifndef _BITBOARD_H_
