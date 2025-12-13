@@ -120,9 +120,3 @@ class FeatureSet:
             real_offset += feature.num_real_features
             offset += feature.num_features
         return indices
-
-    def get_initial_psqt_features(self) -> list[int]:
-        init = []
-        for feature in self.features:
-            init += feature.get_initial_psqt_features()
-        return init

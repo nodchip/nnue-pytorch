@@ -148,24 +148,21 @@ class NNUEWriter:
 
         all_weight = coalesce_ft_weights(model.feature_set, layer)
         weight = all_weight[:, : model.L1]
-        psqt_weight = all_weight[:, model.L1 :]
 
         def histogram_callback(
-            bias: torch.Tensor, weight: torch.Tensor, psqt_weight: torch.Tensor
+            bias: torch.Tensor, weight: torch.Tensor
         ):
             ascii_hist("ft bias:", bias.numpy())
             ascii_hist("ft weight:", weight.numpy())
-            ascii_hist("ft psqt weight:", psqt_weight.numpy())
 
-        bias, weight, psqt_weight = model.quantization.quantize_feature_transformer(
-            bias, weight, psqt_weight, histogram_callback
+        bias, weight = model.quantization.quantize_feature_transformer(
+            bias, weight, histogram_callback
         )
 
         # Weights stored as [num_features][outputs]
 
         self.write_tensor(bias.flatten().numpy(), ft_compression)
         self.write_tensor(weight.flatten().numpy(), ft_compression)
-        self.write_tensor(psqt_weight.flatten().numpy(), ft_compression)
 
     def write_fc_layer(
         self, model: NNUEModel, layer: nn.Linear, is_output=False
@@ -228,7 +225,7 @@ class NNUEReader:
         self.read_int32(
             feature_set.hash ^ (self.config.L1 * 2)
         )  # Feature transformer hash
-        self.read_feature_transformer(self.model.input, self.model.num_psqt_buckets)
+        self.read_feature_transformer(self.model.input)
         for i in range(self.model.num_ls_buckets):
             l1 = nn.Linear(2 * self.config.L1 // 2, self.config.L2 + 1)
             l2 = nn.Linear(self.config.L2 * 2, self.config.L3)
@@ -304,23 +301,22 @@ class NNUEReader:
             raise Exception("Invalid compression method.")
 
     def read_feature_transformer(
-        self, layer: BaseFeatureTransformerSlice, num_psqt_buckets: int
+        self, layer: BaseFeatureTransformerSlice
     ) -> None:
         shape = layer.weight.shape
 
-        bias = self.tensor(np.int16, [layer.bias.shape[0] - num_psqt_buckets])
+        bias = self.tensor(np.int16, [layer.bias.shape[0]])
         # weights stored as [num_features][outputs]
-        weight = self.tensor(np.int16, [shape[0], shape[1] - num_psqt_buckets])
-        psqt_weight = self.tensor(np.int32, [shape[0], num_psqt_buckets])
+        weight = self.tensor(np.int16, [shape[0], shape[1]])
 
-        bias, weight, psqt_weight = (
+        bias, weight = (
             self.model.quantization.dequantize_feature_transformer(
-                bias, weight, psqt_weight
+                bias, weight
             )
         )
 
-        layer.bias.data = torch.cat([bias, torch.tensor([0] * num_psqt_buckets)])
-        layer.weight.data = torch.cat([weight, psqt_weight], dim=1)
+        layer.bias.data = torch.cat([bias])
+        layer.weight.data = torch.cat([weight], dim=1)
 
     def read_fc_layer(self, layer: nn.Linear, is_output: bool = False) -> None:
         # FC inputs are padded to 32 elements by spec.

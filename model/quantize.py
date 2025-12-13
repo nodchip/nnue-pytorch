@@ -60,32 +60,24 @@ class QuantizationManager:
         self,
         bias: torch.Tensor,
         weight: torch.Tensor,
-        psqt_weight: torch.Tensor,
         callback: Callable = lambda *args, **kwargs: None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         bias = bias.mul(self.quantized_one).round().to(torch.int16)
         weight = weight.mul(self.quantized_one).round().to(torch.int16)
-        psqt_weight = (
-            psqt_weight.mul(self.nnue2score * self.weight_scale_out)
-            .round()
-            .to(torch.int32)
-        )
 
-        callback(bias, weight, psqt_weight)
+        callback(bias, weight)
 
-        return bias, weight, psqt_weight
+        return bias, weight
 
     def dequantize_feature_transformer(
         self,
         bias: torch.Tensor,
         weight: torch.Tensor,
-        psqt_weight: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         bias = bias.divide(self.quantized_one)
         weight = weight.divide(self.quantized_one)
-        psqt_weight = psqt_weight.divide(self.nnue2score * self.weight_scale_out)
 
-        return bias, weight, psqt_weight
+        return bias, weight
 
     def quantize_fc_layer(
         self,

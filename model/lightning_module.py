@@ -36,13 +36,12 @@ class NNUE(L.LightningModule):
         gamma=0.992,
         lr=8.75e-4,
         param_index=0,
-        num_psqt_buckets=8,
-        num_ls_buckets=8,
+        num_ls_buckets=9,
         loss_params=LossParams(),
     ):
         super().__init__()
         self.model: NNUEModel = NNUEModel(
-            feature_set, config, quantize_config, num_psqt_buckets, num_ls_buckets
+            feature_set, config, quantize_config, num_ls_buckets
         )
         self.loss_params = loss_params
         self.max_epoch = max_epoch
@@ -66,7 +65,6 @@ class NNUE(L.LightningModule):
             black_values,
             outcome,
             score,
-            psqt_indices,
             layer_stack_indices,
         ) = batch
 
@@ -78,7 +76,6 @@ class NNUE(L.LightningModule):
                 white_values,
                 black_indices,
                 black_values,
-                psqt_indices,
                 layer_stack_indices,
             )
             * self.model.quantization.nnue2score

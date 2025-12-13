@@ -49,7 +49,6 @@ def eval_model_batch(model, batch: data_loader.SparseBatchPtr):
         black_values,
         outcome,
         score,
-        psqt_indices,
         layer_stack_indices,
     ) = batch.contents.get_tensors("cuda")
 
@@ -62,7 +61,6 @@ def eval_model_batch(model, batch: data_loader.SparseBatchPtr):
             white_values,
             black_indices,
             black_values,
-            psqt_indices,
             layer_stack_indices,
         )
         * 600.0

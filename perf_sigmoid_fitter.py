@@ -73,7 +73,6 @@ def gather_statistics_from_batches(batches, bucket_size):
             black_values,
             outcome,
             score,
-            psqt_indices,
             layer_stack_indices,
         ) = batch
         batch_size = len(us)

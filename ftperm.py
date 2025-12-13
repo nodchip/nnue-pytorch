@@ -471,7 +471,6 @@ def forward_ft(
     white_values: torch.Tensor,
     black_indices: torch.Tensor,
     black_values: torch.Tensor,
-    psqt_indices: torch.Tensor,
     layer_stack_indices: torch.Tensor,
 ) -> torch.Tensor:
     wp, bp = model.input(white_indices, white_values, black_indices, black_values)
@@ -500,7 +499,6 @@ def eval_ft(model: NNUEModel, batch: data_loader.SparseBatchPtr) -> torch.Tensor
             black_values,
             outcome,
             score,
-            psqt_indices,
             layer_stack_indices,
         ) = batch.contents.get_tensors("cuda")
         res = forward_ft(
@@ -511,7 +509,6 @@ def eval_ft(model: NNUEModel, batch: data_loader.SparseBatchPtr) -> torch.Tensor
             white_values,
             black_indices,
             black_values,
-            psqt_indices,
             layer_stack_indices,
         )
         return res

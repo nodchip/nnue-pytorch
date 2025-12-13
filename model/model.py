@@ -13,8 +13,7 @@ class NNUEModel(nn.Module):
         feature_set: FeatureSet,
         config: ModelConfig,
         quantize_config: QuantizationConfig,
-        num_psqt_buckets: int = 8,
-        num_ls_buckets: int = 8,
+        num_ls_buckets: int = 9,
     ):
         super().__init__()
 
@@ -22,11 +21,10 @@ class NNUEModel(nn.Module):
         self.L2 = config.L2
         self.L3 = config.L3
 
-        self.num_psqt_buckets = num_psqt_buckets
         self.num_ls_buckets = num_ls_buckets
 
         self.input = DoubleFeatureTransformerSlice(
-            feature_set.num_features, self.L1 + self.num_psqt_buckets
+            feature_set.num_features, self.L1
         )
         self.feature_set = feature_set
         self.layer_stacks = LayerStacks(self.num_ls_buckets, config)
@@ -38,7 +36,6 @@ class NNUEModel(nn.Module):
 
     def _init_layers(self):
         self._zero_virtual_feature_weights()
-        self._init_psqt()
 
     def _zero_virtual_feature_weights(self):
         """
@@ -50,36 +47,6 @@ class NNUEModel(nn.Module):
             for a, b in self.feature_set.get_virtual_feature_ranges():
                 weights[a:b, :] = 0.0
         self.input.weight = nn.Parameter(weights)
-
-    def _init_psqt(self):
-        input_weights = self.input.weight
-        input_bias = self.input.bias
-        # 1.0 / kPonanzaConstant
-        scale = 1 / self.quantization.nnue2score
-
-        with torch.no_grad():
-            initial_values = self.feature_set.get_initial_psqt_features()
-            assert len(initial_values) == self.feature_set.num_features
-
-            new_weights = (
-                torch.tensor(
-                    initial_values,
-                    device=input_weights.device,
-                    dtype=input_weights.dtype,
-                )
-                * scale
-            )
-
-            for i in range(self.num_psqt_buckets):
-                input_weights[:, self.L1 + i] = new_weights
-                # Bias doesn't matter because it cancels out during
-                # inference during perspective averaging. We set it to 0
-                # just for the sake of it. It might still diverge away from 0
-                # due to gradient imprecision but it won't change anything.
-                input_bias[self.L1 + i] = 0.0
-
-        self.input.weight = nn.Parameter(input_weights)
-        self.input.bias = nn.Parameter(input_bias)
 
     def clip_weights(self):
         """
@@ -173,12 +140,11 @@ class NNUEModel(nn.Module):
         white_values: torch.Tensor,
         black_indices: torch.Tensor,
         black_values: torch.Tensor,
-        psqt_indices: torch.Tensor,
         layer_stack_indices: torch.Tensor,
     ):
         wp, bp = self.input(white_indices, white_values, black_indices, black_values)
-        w, wpsqt = torch.split(wp, self.L1, dim=1)
-        b, bpsqt = torch.split(bp, self.L1, dim=1)
+        w, = torch.split(wp, self.L1, dim=1)
+        b, = torch.split(bp, self.L1, dim=1)
         l0_ = (us * torch.cat([w, b], dim=1)) + (them * torch.cat([b, w], dim=1))
         l0_ = torch.clamp(l0_, 0.0, 1.0)
 
@@ -188,12 +154,6 @@ class NNUEModel(nn.Module):
         # and it's more efficient to divide by 128 instead.
         l0_ = torch.cat(l0_s1, dim=1) * (127 / 128)
 
-        psqt_indices_unsq = psqt_indices.unsqueeze(dim=1)
-        wpsqt = wpsqt.gather(1, psqt_indices_unsq)
-        bpsqt = bpsqt.gather(1, psqt_indices_unsq)
-        # The PSQT values are averaged over perspectives. "Their" perspective
-        # has a negative influence (us-0.5 is 0.5 for white and -0.5 for black,
-        # which does both the averaging and sign flip for black to move)
-        x = self.layer_stacks(l0_, layer_stack_indices) + (wpsqt - bpsqt) * (us - 0.5)
+        x = self.layer_stacks(l0_, layer_stack_indices)
 
         return x

@@ -451,7 +451,7 @@ def main():
         max_epochs=args.max_epochs,
         accelerator="cuda",
         devices=[int(x) for x in args.gpus.rstrip(",").split(",") if x]
-        if args.gpus
+            if args.gpus
         else "auto",
         logger=tb_logger,
         callbacks=[
@@ -493,6 +493,10 @@ def main():
 
     with open(os.path.join(logdir, "training_finished"), "w"):
         pass
+
+    print(f'tb_logger.log_dir={tb_logger.log_dir}')
+    ckpt_file_path = os.path.join(tb_logger.log_dir, 'final.ckpt')
+    trainer.save_checkpoint(ckpt_file_path)
 
 
 if __name__ == "__main__":

@@ -22,7 +22,6 @@ class SparseBatch(ctypes.Structure):
         ("black", ctypes.POINTER(ctypes.c_int)),
         ("white_values", ctypes.POINTER(ctypes.c_float)),
         ("black_values", ctypes.POINTER(ctypes.c_float)),
-        ("psqt_indices", ctypes.POINTER(ctypes.c_int)),
         ("layer_stack_indices", ctypes.POINTER(ctypes.c_int)),
     ]
 
@@ -79,14 +78,6 @@ class SparseBatch(ctypes.Structure):
             .pin_memory()
             .to(device=device, non_blocking=True)
         )
-        psqt_indices = (
-            torch.from_numpy(
-                np.ctypeslib.as_array(self.psqt_indices, shape=(self.size,))
-            )
-            .long()
-            .pin_memory()
-            .to(device=device, non_blocking=True)
-        )
         layer_stack_indices = (
             torch.from_numpy(
                 np.ctypeslib.as_array(self.layer_stack_indices, shape=(self.size,))
@@ -104,7 +95,6 @@ class SparseBatch(ctypes.Structure):
             black_values,
             outcome,
             score,
-            psqt_indices,
             layer_stack_indices,
         )
 
@@ -138,31 +128,6 @@ class CDataLoaderAPI:
         raise FileNotFoundError("Cannot find data_loader shared library.")
 
     def _define_prototypes(self):
-        # EXPORT FenBatchStream* CDECL create_fen_batch_stream(
-        #     int concurrency,
-        #     int num_files,
-        #     const char* const* filenames,
-        #     int batch_size,
-        #     bool cyclic,
-        #     DataloaderSkipConfig config
-        # )
-        self.dll.create_fen_batch_stream.restype = ctypes.c_void_p
-        self.dll.create_fen_batch_stream.argtypes = [
-            ctypes.c_int,
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_char_p),
-            ctypes.c_int,
-            ctypes.c_bool,
-            CDataloaderSkipConfig,
-        ]
-
-        # EXPORT void CDECL destroy_fen_batch_stream(FenBatchStream* stream)
-        self.dll.destroy_fen_batch_stream.argtypes = [ctypes.c_void_p]
-
-        # EXPORT FenBatch* CDECL fetch_next_fen_batch(Stream<FenBatch>* stream)
-        self.dll.fetch_next_fen_batch.restype = ctypes.POINTER(FenBatch)
-        self.dll.fetch_next_fen_batch.argtypes = [ctypes.c_void_p]
-
         # EXPORT Stream<SparseBatch>* CDECL create_sparse_batch_stream(
         #     const char* feature_set_c,
         #     int concurrency,
@@ -189,24 +154,6 @@ class CDataLoaderAPI:
         # EXPORT SparseBatch* CDECL fetch_next_sparse_batch(Stream<SparseBatch>* stream)
         self.dll.fetch_next_sparse_batch.restype = ctypes.POINTER(SparseBatch)
         self.dll.fetch_next_sparse_batch.argtypes = [ctypes.c_void_p]
-
-        # EXPORT SparseBatch* get_sparse_batch_from_fens(
-        #    const char* feature_set_c,
-        #    int num_fens,
-        #    const char* const* fens,
-        #    int* scores,
-        #    int* plies,
-        #    int* results
-        # )
-        self.dll.get_sparse_batch_from_fens.restype = ctypes.POINTER(SparseBatch)
-        self.dll.get_sparse_batch_from_fens.argtypes = [
-            ctypes.c_char_p,
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_char_p),
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.POINTER(ctypes.c_int),
-            ctypes.POINTER(ctypes.c_int),
-        ]
 
 
 type SparseBatchPtr = ctypes._Pointer[SparseBatch]
