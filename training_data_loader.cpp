@@ -12,6 +12,8 @@
 #include "lib/nnue_training_data_stream.h"
 #include "lib/rng.h"
 
+#include "YaneuraOu/source/usi.h"
+
 #if defined (__x86_64__)
 #define EXPORT
 #define CDECL
@@ -266,6 +268,22 @@ struct SparseBatch
 
 private:
 
+    // レイヤースタックの選択。双方の玉の段に応じて9通りに分岐させる。
+    static constexpr int kLayerStacks = 9;
+    static int stack_index_for_nnue(const Position& pos) {
+        constexpr int kFToIndex[] = { 0, 0, 0, 3, 3, 3, 6, 6, 6 };
+        constexpr int kEToIndex[] = { 0, 0, 0, 1, 1, 1, 2, 2, 2 };
+        const auto stm = pos.side_to_move();
+        const auto f_king = pos.king_square(stm);
+        const auto e_king = pos.king_square(~stm);
+        const auto f_rank = stm == BLACK ? rank_of(f_king) : rank_of(Inv(f_king));
+        const auto e_rank = stm == BLACK ? rank_of(Inv(e_king)) : rank_of(e_king);
+        int idx = kFToIndex[f_rank] + kEToIndex[e_rank];
+        if (idx < 0) idx = 0;
+        if (idx >= kLayerStacks) idx = kLayerStacks - 1;
+        return idx;
+    }
+
     template <typename... Ts>
     void fill_entry(FeatureSet<Ts...>, int i, const shogi::TrainingDataEntry& e)
     {
@@ -273,7 +291,7 @@ private:
         outcome[i] = (e.result + 1.0f) / 2.0f;
         score[i] = e.score;
         psqt_indices[i] = (e.pos->pieces().pop_count() - 1) / 4;
-        layer_stack_indices[i] = psqt_indices[i];
+        layer_stack_indices[i] = stack_index_for_nnue(*e.pos);
         fill_features(FeatureSet<Ts...>{}, i, e);
     }
 
@@ -475,11 +493,29 @@ std::function<bool(const shogi::TrainingDataEntry&)> make_skip_predicate(Dataloa
     return nullptr;
 }
 
+namespace {
+    std::once_flag INITIALIZED;
+}
+
 extern "C" {
 
     // changing the signature needs matching changes in data_loader/_native.py
     EXPORT Stream<SparseBatch>* CDECL create_sparse_batch_stream(const char* feature_set_c, int concurrency, int num_files, const char* const* filenames, int batch_size, bool cyclic, DataloaderSkipConfig config)
     {
+        auto initialize = []() {
+            USI::init(Options);
+            //Bitboards::init();
+            //Position::init();
+            //Search::init();
+
+            Threads.set(1);
+
+            //Eval::init();
+
+            is_ready();
+            };
+        std::call_once(INITIALIZED, initialize);
+
         auto skipPredicate = make_skip_predicate(config);
         auto filenames_vec = std::vector<std::string>(filenames, filenames + num_files);
 
@@ -563,7 +599,7 @@ int main(int argc, char** argv)
         .simple_eval_skipping = 0,
         .param_index = 0
     };
-    auto stream = create_sparse_batch_stream("HalfKAv2_hm^", concurrency, file_count, files, batch_size, cyclic, config);
+    auto stream = create_sparse_batch_stream("HalfKA_hm^", concurrency, file_count, files, batch_size, cyclic, config);
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
