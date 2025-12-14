@@ -62,7 +62,7 @@ def decode_leb_128_array(arr: bytes, n: int) -> npt.NDArray:
 
 
 # hardcoded for now
-VERSION = 0x7AF32F20
+VERSION = 0x7af32f16
 DEFAULT_DESCRIPTION = "Network trained with the https://github.com/official-stockfish/nnue-pytorch trainer."
 
 
@@ -87,10 +87,10 @@ class NNUEWriter:
         # but it might be necessary in the future.
         fc_hash = self.fc_hash(model)
         self.write_header(model, fc_hash, description)
-        self.int32(model.feature_set.hash ^ (model.L1 * 2))  # Feature transformer hash
+        self.int32(0x5f134ab8)  # Feature transformer hash
         self.write_feature_transformer(model, ft_compression)
         for l1, l2, output in model.layer_stacks.get_coalesced_layer_stacks():
-            self.int32(fc_hash)  # FC layers hash
+            self.int32(0x6333718A)  # FC layers hash
             self.write_fc_layer(model, l1)
             self.write_fc_layer(model, l2)
             self.write_fc_layer(model, output, is_output=True)
@@ -120,9 +120,7 @@ class NNUEWriter:
 
     def write_header(self, model: NNUEModel, fc_hash: int, description: str) -> None:
         self.int32(VERSION)  # version
-        self.int32(
-            fc_hash ^ model.feature_set.hash ^ (model.L1 * 2)
-        )  # halfkp network hash
+        self.int32(0x3c203b32)  # halfkp network hash
         encoded_description = description.encode("utf-8")
         self.int32(len(encoded_description))  # Network definition
         self.buf.extend(encoded_description)
