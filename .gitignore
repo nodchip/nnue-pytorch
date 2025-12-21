@@ -8,3 +8,4 @@ easy_train_data
 *.yaml
 /nnue-pytorch/.vs
 /nnue-pytorch/nnue-pytorch/*.user
+/nnue-pytorch/x64
