@@ -301,7 +301,7 @@ def main():
     parser.add_argument(
         "--epoch-size",
         type=int,
-        default=100000000,
+        default=1000000,
         dest="epoch_size",
         help="Number of positions per epoch.",
     )
@@ -334,6 +334,37 @@ def main():
         help="Skip positions that have abs(simple_eval(pos)) < n",
     )
     parser.add_argument("--l1", type=int, default=M.ModelConfig().L1)
+    parser.add_argument(
+        "--num-batches-warmup",
+        default=10000,
+        type=int,
+        dest="num_batches_warmup",
+        help="Number of batches for warm-up.",
+    )
+    parser.add_argument(
+        "--newbob-decay",
+        default=0.5,
+        type=float,
+        dest="newbob_decay",
+        help="Newbob decay.",
+    )
+    parser.add_argument(
+        "--num-epochs-to-adjust-lr",
+        default=500,
+        type=int,
+        dest="num_epochs_to_adjust_lr",
+        help="Number of epochs to adjust learning rate.",
+    )
+    parser.add_argument(
+        "--min-newbob-scale",
+        default=1e-5,
+        type=float,
+        dest="min_newbob_scale",
+        help="Minimum learning rate to stop the training.",
+    )
+    parser.add_argument(
+        "--momentum", default=0.0, type=float, dest="momentum", help="Momentum."
+    )
     M.add_feature_args(parser)
     args = parser.parse_args()
 
@@ -387,12 +418,14 @@ def main():
             feature_set=feature_set,
             loss_params=loss_params,
             max_epoch=max_epoch,
-            num_batches_per_epoch=args.epoch_size / batch_size,
-            gamma=args.gamma,
             lr=args.lr,
-            param_index=args.param_index,
             config=M.ModelConfig(L1=args.l1),
             quantize_config=M.QuantizationConfig(),
+            num_batches_warmup=args.num_batches_warmup,
+            newbob_decay=args.newbob_decay,
+            num_epochs_to_adjust_lr=args.num_epochs_to_adjust_lr,
+            min_newbob_scale=args.min_newbob_scale,
+            momentum=args.momentum,
         )
     else:
         assert os.path.exists(args.resume_from_model)
@@ -450,13 +483,15 @@ def main():
         default_root_dir=logdir,
         max_epochs=args.max_epochs,
         accelerator="cuda",
-        devices=[int(x) for x in args.gpus.rstrip(",").split(",") if x]
+        devices=(
+            [int(x) for x in args.gpus.rstrip(",").split(",") if x]
             if args.gpus
-        else "auto",
+            else "auto"
+        ),
         logger=tb_logger,
         callbacks=[
             checkpoint_callback,
-            TQDMProgressBar(refresh_rate=300),
+            TQDMProgressBar(0),
             TimeLimitAfterCheckpoint(args.max_time),
             M.WeightClippingCallback(),
         ],
@@ -494,8 +529,8 @@ def main():
     with open(os.path.join(logdir, "training_finished"), "w"):
         pass
 
-    print(f'tb_logger.log_dir={tb_logger.log_dir}')
-    ckpt_file_path = os.path.join(tb_logger.log_dir, 'final.ckpt')
+    print(f"tb_logger.log_dir={tb_logger.log_dir}")
+    ckpt_file_path = os.path.join(tb_logger.log_dir, "final.ckpt")
     trainer.save_checkpoint(ckpt_file_path)
 
 
