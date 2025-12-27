@@ -54,7 +54,7 @@ class NNUE(L.LightningModule):
         return self.model(*args, **kwargs)
 
     def step_(self, batch: tuple[Tensor, ...], batch_idx, loss_type):
-        _ = batch_idx  # unused, but required by pytorch-lightning
+        _ = batch_idx
 
         (
             us,
@@ -68,6 +68,7 @@ class NNUE(L.LightningModule):
             layer_stack_indices,
         ) = batch
 
+        # NNUE raw score (cp-like)
         scorenet = (
             self.model(
                 us,
@@ -82,31 +83,39 @@ class NNUE(L.LightningModule):
         )
 
         p = self.loss_params
-        # convert the network and search scores to an estimate match result
-        # based on the win_rate_model, with scalings and offsets optimized
-        q = (scorenet - p.in_offset) / p.in_scaling
-        qm = (-scorenet - p.in_offset) / p.in_scaling
-        qf = 0.5 * (1.0 + q.sigmoid() - qm.sigmoid())
 
-        s = (score - p.out_offset) / p.out_scaling
-        sm = (-score - p.out_offset) / p.out_scaling
-        pf = 0.5 * (1.0 + s.sigmoid() - sm.sigmoid())
+        # ---- HalfKP-style win_rate_model ----
+        # NNUE output is treated as LOGIT
+        q = scorenet / p.out_scaling
 
-        # blend that eval based score with the actual game outcome
+        # Search score -> win rate
+        pf = torch.sigmoid(score / p.out_scaling)
+
+        # Actual game outcome (0/0.5/1)
         t = outcome
+
+        # Lambda schedule (epoch-based)
         actual_lambda = p.start_lambda + (p.end_lambda - p.start_lambda) * (
             self.current_epoch / self.max_epoch
         )
-        pt = pf * actual_lambda + t * (1.0 - actual_lambda)
 
-        # use a MSE-like loss function
-        loss = torch.pow(torch.abs(pt - qf), p.pow_exp)
-        if p.qp_asymmetry != 0.0:
-            loss = loss * ((qf > pt) * p.qp_asymmetry + 1)
+        # ---- Stockfish-style cross entropy ----
+        eps = 1e-12
+
+        teacher_loss = -(
+            pf * torch.nn.functional.logsigmoid(q) +
+            (1.0 - pf) * torch.nn.functional.logsigmoid(-q)
+        )
+
+        outcome_loss = -(
+            t * torch.nn.functional.logsigmoid(q) +
+            (1.0 - t) * torch.nn.functional.logsigmoid(-q)
+        )
+
+        loss = actual_lambda * teacher_loss + (1.0 - actual_lambda) * outcome_loss
         loss = loss.mean()
 
         self.log(loss_type, loss, prog_bar=True)
-
         return loss
 
     def training_step(self, batch, batch_idx):
