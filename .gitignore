@@ -1,4 +1,11 @@
 __pycache__/
-env/
+.vs/
+.vscode/
+*.bak
+*.user
+/libtraining_data_loader.dll
 build/
+env/
 logs/
+venv/
+x64/
