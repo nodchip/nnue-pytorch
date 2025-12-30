@@ -238,6 +238,63 @@ struct HalfKPFactorized {
 //     }
 // };
 
+struct HalfKA_hm {
+    static constexpr int NUM_SQ = 81;
+    static constexpr int NUM_PLANES = Eval::BonaPiece::fe_end;
+    static constexpr int INPUTS = 5 * static_cast<int>(FILE_NB) * static_cast<int>(Eval::BonaPiece::e_king);
+
+    static constexpr int MAX_ACTIVE_FEATURES = PIECE_NUMBER_NB;
+
+    static int make_index(Square sq_k, Eval::BonaPiece p) {
+        if (sq_k >= SQ_61) {
+            // ã Ç™6ãÿÅ`9ãÿÇ…Ç¢ÇÈèÍçáÅA4ãÿÅ`1ãÿÇ…îΩì]Ç∑ÇÈÅB
+            sq_k = Mir(sq_k);
+
+            if (p >= Eval::BonaPiece::fe_hand_end) {
+                // éùãÓÇÕîΩì]ÇµÇ»Ç¢ÅB
+                int piece_index = (p - Eval::BonaPiece::fe_hand_end) / SQ_NB;
+                Square sq_p = static_cast<Square>((p - Eval::BonaPiece::fe_hand_end) % SQ_NB);
+                sq_p = Mir(sq_p);
+                p = static_cast<Eval::BonaPiece>(Eval::BonaPiece::fe_hand_end + piece_index * static_cast<int>(SQ_NB) + sq_p);
+            }
+        }
+        // å„éËã ÇÕé©ã Ç∆ìØÇ∂PLANEÇ…éùÇ¡ÇƒÇ¢Ç≠
+        return static_cast<int>(Eval::BonaPiece::e_king) * static_cast<int>(sq_k) + static_cast<int>(p >= Eval::BonaPiece::e_king ? p - SQ_NB : p);
+    }
+
+    static int fill_features_sparse(int i, const TrainingDataEntry& e, int* features, float* values, int& counter, Color color)
+    {
+        auto& pos = *e.pos;
+        Eval::BonaPiece* pieces = nullptr;
+        if (color == Color::BLACK) {
+            pieces = pos.eval_list()->piece_list_fb();
+        }
+        else {
+            pieces = pos.eval_list()->piece_list_fw();
+        }
+        PieceNumber target = static_cast<PieceNumber>(PIECE_NUMBER_KING + color);
+        auto sq_target_k = static_cast<Square>((pieces[target] - Eval::BonaPiece::f_king) % SQ_NB);
+
+        // We order the features so that the resulting sparse
+        // tensor is coalesced.
+        int features_unordered[PIECE_NUMBER_NB];
+        for (PieceNumber i = PIECE_NUMBER_ZERO; i < PIECE_NUMBER_NB; ++i) {
+            auto p = pieces[i];
+            features_unordered[i] = make_index(sq_target_k, p);
+        }
+        std::sort(features_unordered, features_unordered + PIECE_NUMBER_NB);
+        for (int k = 0; k < PIECE_NUMBER_NB; ++k)
+        {
+            int idx = counter * 2;
+            features[idx] = i;
+            features[idx + 1] = features_unordered[k];
+            values[counter] = 1.0f;
+            counter += 1;
+        }
+        return INPUTS;
+    }
+};
+
 template <typename T, typename... Ts>
 struct FeatureSet
 {
@@ -555,6 +612,10 @@ extern "C" {
         {
             return new SparseBatch(FeatureSet<HalfKPFactorized>{}, entries);
         }
+        else if (feature_set == "HalfKA_hm")
+        {
+            return new SparseBatch(FeatureSet<HalfKA_hm>{}, entries);
+        }
         // else if (feature_set == "HalfKA")
         // {
         //     return new SparseBatch(FeatureSet<HalfKA>{}, entries);
@@ -604,6 +665,10 @@ extern "C" {
         {
             return new FeaturedBatchStream<FeatureSet<HalfKPFactorized>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
         }
+        else if (feature_set == "HalfKA_hm")
+        {
+            return new FeaturedBatchStream<FeatureSet<HalfKA_hm>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
+        }
         // else if (feature_set == "HalfKA")
         // {
         //     return new FeaturedBatchStream<FeatureSet<HalfKA>, SparseBatch>(concurrency, filename, batch_size, cyclic, skipPredicate);
@@ -638,7 +703,7 @@ extern "C" {
 
 int main()
 {
-    auto stream = create_sparse_batch_stream("HalfKP^", 4, R"(C:\shogi\training_data\suisho5.shuffled.qsearch\shuffled.bin)", 8192, true, false, 0);
+    auto stream = create_sparse_batch_stream("HalfKA_hm", 4, R"(C:\shogi\training_data\training_data.suisho5.depth=9\kifu.tag=train.depth=9.num_positions=1000000000.start_time=1648946223.thread_index=000.bin)", 8192, true, false, 0);
     auto t0 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 1000; ++i)
     {
