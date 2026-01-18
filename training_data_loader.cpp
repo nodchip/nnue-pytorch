@@ -27,157 +27,50 @@
 #endif
 #endif
 
-// ====== Shogi HalfKA_hm (hm + king-bucket + packed bona piece) ======
-
 struct HalfKA_hm {
-    // --- Shogi constants ---
-    static constexpr int SQ_NB = 81;  // 9x9
-    static constexpr int FILE_NB = 9;
+    static constexpr int NUM_SQ = 81;
+    static constexpr int INPUTS = 5 * static_cast<int>(FILE_NB) * static_cast<int>(Eval::BonaPiece::e_king);
 
-    // "e_king" here is BonaPiece::e_king (start index of enemy king in BonaPiece space)
-    // After packing enemy king by -SQ_NB, the packed range becomes [0, e_king-1]
-    static constexpr int PIECE_INPUTS = static_cast<int>(Eval::BonaPiece::e_king);
+    static constexpr int MAX_ACTIVE_FEATURES = PIECE_NUMBER_NB;
 
-    // King is bucketed into 9 ranks * 5 files (after half-mirror)
-    static constexpr int KING_BUCKETS = 5 * FILE_NB; // 45
+    static int make_index(Square sq_k, Eval::BonaPiece p) {
+        if (sq_k >= SQ_61) {
+            // Áéâ„Åå6Á≠ãÔΩû9Á≠ã„Å´„ÅÑ„ÇãÂ†¥Âêà„ÄÅ4Á≠ãÔΩû1Á≠ã„Å´ÂèçËª¢„Åô„Çã„ÄÇ
+            sq_k = Mir(sq_k);
 
-    static constexpr int INPUTS = KING_BUCKETS * PIECE_INPUTS;
-
-    // Active = number of pieces in EvalList (typically 38), keep some slack
-    static constexpr int MAX_ACTIVE_FEATURES = Eval::EvalList::MAX_LENGTH; // 40
-
-    // Mirror by file for shogi squares (you likely already have Mir(sq) in your codebase)
-    static inline Square mir_file(Square sq) {
-        return Mir(sq);
-    }
-
-    // Convert oriented king square -> compact bucket [0..44]
-    // - First: perspective orientation (black-view vs white-view)
-    // - Then: half-mirror by file (6..9 -> 4..1)
-    // - Finally: compress to rank*5 + file_m
-    static inline int king_bucket(Color perspective, Square ksq) {
-        // If your engine uses Inv() for white-view, apply it here.
-        // In YaneuraOu EvalList, piece_list_fw() already uses Inv() for squares,
-        // so for king-square we can just use the "from perspective" king square.
-        // If you are taking king square directly from pos, you may need:
-        //   if (perspective == WHITE) ksq = Inv(ksq);
-        //
-        // Here we assume ksq is already in "perspective view".
-
-        int file = file_of(ksq); // 0..8
-        int rank = rank_of(ksq); // 0..8
-
-        // half-mirror: if file >= 5 (6..9ãÿ), mirror
-        int file_m = (file >= 5) ? (8 - file) : file; // now 0..4
-
-        return rank * 5 + file_m; // 0..44
-    }
-
-    // Pack BonaPiece:
-    // - if king-side hm mirror is active, mirror board-square part only
-    // - then pack enemy-king range into [0..e_king-1] by -SQ_NB
-    static inline int pack_bonapiece(Eval::BonaPiece p, bool hm_mirror) {
-        using BP = Eval::BonaPiece;
-        const int ip = static_cast<int>(p);
-
-        // Hand pieces must NOT be mirrored
-        const int hand_end = static_cast<int>(BP::fe_hand_end);
-
-        int pp = ip;
-        if (hm_mirror && pp >= hand_end) {
-            // board piece: (piece_index, sq) layout is: hand_end + piece_index*81 + sq
-            const int rel = pp - hand_end;
-            const int piece_index = rel / SQ_NB;
-            const int sq = rel % SQ_NB;
-
-            Square sq_p = static_cast<Square>(sq);
-            sq_p = mir_file(sq_p);
-
-            pp = hand_end + piece_index * SQ_NB + static_cast<int>(sq_p);
+            if (p >= Eval::BonaPiece::fe_hand_end) {
+                // ÊåÅÈßí„ÅØÂèçËª¢„Åó„Å™„ÅÑ„ÄÇ
+                int piece_index = (p - Eval::BonaPiece::fe_hand_end) / SQ_NB;
+                Square sq_p = static_cast<Square>((p - Eval::BonaPiece::fe_hand_end) % SQ_NB);
+                sq_p = Mir(sq_p);
+                p = static_cast<Eval::BonaPiece>(Eval::BonaPiece::fe_hand_end + piece_index * static_cast<int>(SQ_NB) + sq_p);
+            }
         }
-
-        // pack enemy king to friend king plane
-        const int e_king = static_cast<int>(BP::e_king);
-        if (pp >= e_king)
-            pp -= SQ_NB;
-
-        return pp; // 0..(e_king-1)
+        // ÂæåÊâãÁéâ„ÅØËá™Áéâ„Å®Âêå„ÅòPLANE„Å´ÊåÅ„Å£„Å¶„ÅÑ„Åè
+        return static_cast<int>(Eval::BonaPiece::e_king) * static_cast<int>(sq_k) + static_cast<int>(p >= Eval::BonaPiece::e_king ? p - SQ_NB : p);
     }
 
-    // Feature index = king_bucket * PIECE_INPUTS + packed_bonapiece
-    static inline int feature_index(Color perspective, Square ksq_persp, Eval::BonaPiece p) {
-        int file = file_of(ksq_persp);
-        bool hm_mirror = (file >= 5); // 6..9ãÿÇ»ÇÁÉ~ÉâÅ[
-        int kb = king_bucket(perspective, ksq_persp);
-        int pp = pack_bonapiece(p, hm_mirror);
-        return kb * PIECE_INPUTS + pp;
-    }
-
-    static std::pair<int, int> fill_features_sparse(
-        const shogi::TrainingDataEntry& e, int* features, float* values, Color perspective)
+    static std::pair<int, int> fill_features_sparse(const shogi::TrainingDataEntry& e, int* features, float* values, Color color)
     {
-        // Get BonaPiece list from EvalList in the chosen perspective
-        auto* el = e.pos->eval_list();
-        auto* pieces = (perspective == BLACK)
-            ? el->piece_list_fb()
-            : el->piece_list_fw();
+        auto& pos = *e.pos;
+        Eval::BonaPiece* pieces = nullptr;
+        if (color == Color::BLACK) {
+            pieces = pos.eval_list()->piece_list_fb();
+        }
+        else {
+            pieces = pos.eval_list()->piece_list_fw();
+        }
+        PieceNumber target = static_cast<PieceNumber>(PIECE_NUMBER_KING + color);
+        auto sq_target_k = static_cast<Square>((pieces[target] - Eval::BonaPiece::f_king) % SQ_NB);
 
-        // Determine king square in the same perspective view
-        // In YaneuraOu EvalList, king's BonaPiece is located at PIECE_NUMBER_KING + perspective
-        const PieceNumber king_no = static_cast<PieceNumber>(PIECE_NUMBER_KING + perspective);
-        Square ksq = static_cast<Square>((static_cast<int>(pieces[king_no]) - static_cast<int>(Eval::BonaPiece::f_king)) % SQ_NB);
-
+        // We order the features so that the resulting sparse
+        // tensor is coalesced.
         int j = 0;
-        for (PieceNumber i = PIECE_NUMBER_ZERO; i < PIECE_NUMBER_NB; ++i) {
+        for (; j < PIECE_NUMBER_NB; ++j)
+        {
+            auto p = pieces[j];
             values[j] = 1.0f;
-            features[j] = feature_index(perspective, ksq, pieces[i]);
-            ++j;
-        }
-        return { j, INPUTS };
-    }
-};
-
-
-// ====== Shogi HalfKA_hm^ (factorized) ======
-// Adds "piece-only" factor: packed_bonapiece (same packing/mirror rule), independent of king bucket.
-struct HalfKA_hmFactorized {
-    static constexpr int SQ_NB = HalfKA_hm::SQ_NB;
-    static constexpr int FILE_NB = HalfKA_hm::FILE_NB;
-
-    static constexpr int PIECE_INPUTS = HalfKA_hm::PIECE_INPUTS;
-    static constexpr int KING_BUCKETS = HalfKA_hm::KING_BUCKETS;
-
-    static constexpr int BASE_INPUTS = HalfKA_hm::INPUTS;
-    static constexpr int FACT_INPUTS = PIECE_INPUTS; // piece-only factor
-    static constexpr int INPUTS = BASE_INPUTS + FACT_INPUTS;
-
-    static constexpr int MAX_ACTIVE_FEATURES =
-        HalfKA_hm::MAX_ACTIVE_FEATURES + HalfKA_hm::MAX_ACTIVE_FEATURES;
-
-    static std::pair<int, int> fill_features_sparse(
-        const shogi::TrainingDataEntry& e, int* features, float* values, Color perspective)
-    {
-        // 1) Base HalfKA_hm
-        auto [start_j, base_inputs] = HalfKA_hm::fill_features_sparse(e, features, values, perspective);
-        int j = start_j;
-
-        // 2) Piece-only factor (offset = BASE_INPUTS)
-        auto* el = e.pos->eval_list();
-        auto* pieces = (perspective == BLACK)
-            ? el->piece_list_fb()
-            : el->piece_list_fw();
-
-        const PieceNumber king_no = static_cast<PieceNumber>(PIECE_NUMBER_KING + perspective);
-        Square ksq = static_cast<Square>((static_cast<int>(pieces[king_no]) - static_cast<int>(Eval::BonaPiece::f_king)) % SQ_NB);
-
-        // Mirror rule depends on king file (same as base)
-        int file = file_of(ksq);
-        bool hm_mirror = (file >= 5);
-
-        for (PieceNumber i = PIECE_NUMBER_ZERO; i < PIECE_NUMBER_NB; ++i) {
-            values[j] = 1.0f;
-            int pp = HalfKA_hm::pack_bonapiece(pieces[i], hm_mirror);
-            features[j] = BASE_INPUTS + pp;
+            features[j] = make_index(sq_target_k, p);
             ++j;
         }
 
@@ -265,7 +158,7 @@ struct SparseBatch
 
 private:
 
-    // ÉåÉCÉÑÅ[ÉXÉ^ÉbÉNÇÃëIëÅBëoï˚ÇÃã ÇÃíiÇ…âûÇ∂Çƒ9í ÇËÇ…ï™äÚÇ≥ÇπÇÈÅB
+    // ÔøΩÔøΩÔøΩCÔøΩÔøΩÔøΩ[ÔøΩXÔøΩ^ÔøΩbÔøΩNÔøΩÃëIÔøΩÔøΩÔøΩBÔøΩoÔøΩÔøΩÔøΩÃã ÇÃíiÔøΩ…âÔøΩÔøΩÔøΩÔøΩÔøΩ9ÔøΩ ÇÔøΩ…ïÔøΩÔøΩÚÇ≥ÇÔøΩÔøΩÔøΩB
     static constexpr int kLayerStacks = 9;
     static int stack_index_for_nnue(const Position& pos) {
         constexpr int kFToIndex[] = { 0, 0, 0, 3, 3, 3, 6, 6, 6 };
@@ -519,10 +412,6 @@ extern "C" {
         if (feature_set == "HalfKA_hm")
         {
             return new FeaturedBatchStream<FeatureSet<HalfKA_hm>, SparseBatch>(concurrency, filenames_vec, batch_size, cyclic, skipPredicate);
-        }
-        else if (feature_set == "HalfKA_hm^")
-        {
-            return new FeaturedBatchStream<FeatureSet<HalfKA_hmFactorized>, SparseBatch>(concurrency, filenames_vec, batch_size, cyclic, skipPredicate);
         }
         fprintf(stderr, "Unknown feature_set %s\n", feature_set_c);
         return nullptr;
