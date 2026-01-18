@@ -48,7 +48,7 @@ def get_available_feature_blocks_names() -> list[str]:
 
 
 def add_feature_args(parser: argparse.ArgumentParser) -> None:
-    _default_feature_set_name = "HalfKA_hm^"
+    _default_feature_set_name = "HalfKA_hm"
     parser.add_argument(
         "--features",
         dest="features",

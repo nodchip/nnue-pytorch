@@ -1,8 +1,6 @@
 import chess
-import torch
-import feature_block
 from collections import OrderedDict
-from feature_block import *
+from .feature_block import FeatureBlock
 
 FILE_NB = 9
 E_KING = 1629
