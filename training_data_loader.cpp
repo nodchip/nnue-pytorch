@@ -66,9 +66,9 @@ struct HalfKA_hm {
         // We order the features so that the resulting sparse
         // tensor is coalesced.
         int j = 0;
-        for (; j < PIECE_NUMBER_NB; ++j)
+        for (PieceNumber i = PIECE_NUMBER_ZERO; i < PIECE_NUMBER_NB; ++i)
         {
-            auto p = pieces[j];
+            auto p = pieces[i];
             values[j] = 1.0f;
             features[j] = make_index(sq_target_k, p);
             ++j;
