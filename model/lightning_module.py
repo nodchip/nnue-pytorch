@@ -1,16 +1,12 @@
 import lightning as L
 import ranger21
-import sys
 import torch
 from torch import Tensor, nn
-from typing import Union, Optional, Callable, Any
 
 from .config import LossParams, ModelConfig
 from .features import FeatureSet
 from .model import NNUEModel
 from .quantize import QuantizationConfig
-from torch.optim.optimizer import Optimizer
-from lightning.pytorch.core.optimizer import LightningOptimizer
 
 
 def _get_parameters(layers: list[nn.Module]):
@@ -36,14 +32,12 @@ class NNUE(L.LightningModule):
         config: ModelConfig,
         quantize_config: QuantizationConfig,
         max_epoch=800,
+        num_batches_per_epoch=int(100_000_000 / 16384),
+        gamma=0.992,
         lr=8.75e-4,
+        param_index=0,
         num_ls_buckets=9,
         loss_params=LossParams(),
-        num_batches_warmup=10000,
-        newbob_decay=0.5,
-        num_epochs_to_adjust_lr=500,
-        min_newbob_scale=1e-5,
-        momentum=0.0,
     ):
         super().__init__()
         self.model: NNUEModel = NNUEModel(
@@ -51,18 +45,10 @@ class NNUE(L.LightningModule):
         )
         self.loss_params = loss_params
         self.max_epoch = max_epoch
+        self.num_batches_per_epoch = num_batches_per_epoch
+        self.gamma = gamma
         self.lr = lr
-        self.num_batches_warmup = num_batches_warmup
-        self.newbob_scale = 1.0
-        self.newbob_decay = newbob_decay
-        self.best_loss = 1e10
-        self.num_epochs_to_adjust_lr = num_epochs_to_adjust_lr
-        self.latest_loss_sum = 0.0
-        self.latest_loss_count = 0
-        # Warmupを開始するステップ数
-        self.warmup_start_global_step = 0
-        self.min_newbob_scale = min_newbob_scale
-        self.momentum = momentum
+        self.param_index = param_index
 
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)
@@ -127,69 +113,10 @@ class NNUE(L.LightningModule):
         return self.step_(batch, batch_idx, "train_loss")
 
     def validation_step(self, batch, batch_idx):
-        outputs = self.step_(batch, batch_idx, "val_loss")
-        self.latest_loss_sum += outputs.item()
-        self.latest_loss_count += 1
-
-    def on_validation_epoch_end(self):
-        if self.newbob_decay == 1.0:
-            return
-
-        if self.current_epoch == 0:
-            return
-
-        if self.current_epoch % self.num_epochs_to_adjust_lr != 0:
-            return
-
-        latest_loss = self.latest_loss_sum / self.latest_loss_count
-        self.latest_loss_sum = 0.0
-        self.latest_loss_count = 0
-        if latest_loss < self.best_loss:
-            self.print(
-                f"{self.current_epoch=}, {latest_loss=} < {self.best_loss=}, accepted, {self.newbob_scale=}"
-            )
-            sys.stdout.flush()
-            self.best_loss = latest_loss
-        else:
-            self.newbob_scale *= self.newbob_decay
-            self.print(
-                f"{self.current_epoch=}, {latest_loss=} >= {self.best_loss=}, rejected, {self.newbob_scale=}"
-            )
-            sys.stdout.flush()
-
-        if self.newbob_scale < self.min_newbob_scale:
-            self.trainer.should_stop = True
-            self.print(f"{self.current_epoch=}, early stopping")
+        self.step_(batch, batch_idx, "val_loss")
 
     def test_step(self, batch, batch_idx):
         self.step_(batch, batch_idx, "test_loss")
-
-    # learning rate warm-up
-    def optimizer_step(
-        self,
-        epoch: int,
-        batch_idx: int,
-        optimizer: Union[Optimizer, LightningOptimizer],
-        optimizer_closure: Optional[Callable[[], Any]] = None,
-    ):
-        # manually warm up lr without a scheduler
-        if (
-            self.trainer.global_step - self.warmup_start_global_step
-            < self.num_batches_warmup
-        ):
-            warmup_scale = min(
-                1.0,
-                float(self.trainer.global_step - self.warmup_start_global_step + 1)
-                / self.num_batches_warmup,
-            )
-        else:
-            warmup_scale = 1.0
-        for pg in optimizer.param_groups:
-            pg["lr"] = self.lr * warmup_scale * self.newbob_scale
-            self.log("lr", pg["lr"])
-
-        # update params
-        optimizer.step(closure=optimizer_closure)
 
     def configure_optimizers(self):
         LR = self.lr
@@ -205,4 +132,25 @@ class NNUE(L.LightningModule):
             {"params": [self.model.layer_stacks.output.linear.bias], "lr": LR},
         ]
 
-        return torch.optim.SGD(train_params, lr=self.lr, momentum=self.momentum)
+        optimizer = ranger21.Ranger21(
+            train_params,
+            lr=1.0,
+            betas=(0.9, 0.999),
+            eps=1.0e-7,
+            using_gc=False,
+            using_normgc=False,
+            weight_decay=0.0,
+            num_batches_per_epoch=self.num_batches_per_epoch,
+            num_epochs=self.max_epoch,
+            warmdown_active=False,
+            use_warmup=False,
+            use_adaptive_gradient_clipping=False,
+            softplus=False,
+            pnm_momentum_factor=0.0,
+        )
+
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=1, gamma=self.gamma
+        )
+
+        return [optimizer], [scheduler]
