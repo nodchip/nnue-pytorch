@@ -1,6 +1,7 @@
 import lightning as L
 import ranger21
 import torch
+import torch.nn.functional as F
 from torch import Tensor, nn
 
 from .config import LossParams, ModelConfig
@@ -82,28 +83,36 @@ class NNUE(L.LightningModule):
         )
 
         p = self.loss_params
-        # convert the network and search scores to an estimate match result
-        # based on the win_rate_model, with scalings and offsets optimized
-        q = (scorenet - p.in_offset) / p.in_scaling
-        qm = (-scorenet - p.in_offset) / p.in_scaling
-        qf = 0.5 * (1.0 + q.sigmoid() - qm.sigmoid())
+        scaling = p.out_scaling
 
-        s = (score - p.out_offset) / p.out_scaling
-        sm = (-score - p.out_offset) / p.out_scaling
-        pf = 0.5 * (1.0 + s.sigmoid() - sm.sigmoid())
-
-        # blend that eval based score with the actual game outcome
+        q = scorenet / scaling
         t = outcome
+        p_teacher = (score / scaling).sigmoid()
+
+        epsilon = 1e-12
+        teacher_entropy = -(
+            p_teacher * (p_teacher + epsilon).log()
+            + (1.0 - p_teacher) * (1.0 - p_teacher + epsilon).log()
+        )
+        outcome_entropy = -(
+            t * (t + epsilon).log()
+            + (1.0 - t) * (1.0 - t + epsilon).log()
+        )
+        teacher_loss = -(
+            p_teacher * F.logsigmoid(q)
+            + (1.0 - p_teacher) * F.logsigmoid(-q)
+        )
+        outcome_loss = -(t * F.logsigmoid(q) + (1.0 - t) * F.logsigmoid(-q))
+
         actual_lambda = p.start_lambda + (p.end_lambda - p.start_lambda) * (
             self.current_epoch / self.max_epoch
         )
-        pt = pf * actual_lambda + t * (1.0 - actual_lambda)
-
-        # use a MSE-like loss function
-        loss = torch.pow(torch.abs(pt - qf), p.pow_exp)
-        if p.qp_asymmetry != 0.0:
-            loss = loss * ((qf > pt) * p.qp_asymmetry + 1)
-        loss = loss.mean()
+        result = actual_lambda * teacher_loss + (1.0 - actual_lambda) * outcome_loss
+        entropy = (
+            actual_lambda * teacher_entropy
+            + (1.0 - actual_lambda) * outcome_entropy
+        )
+        loss = result.mean() - entropy.mean()
 
         self.log(loss_type, loss, prog_bar=True)
 
