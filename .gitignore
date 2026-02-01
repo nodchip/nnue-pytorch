@@ -2,10 +2,12 @@ __pycache__/
 env/
 build/
 logs/
+.vscode/
 testing
 libtraining_data_loader.*
 easy_train_data
 *.yaml
 /nnue-pytorch/.vs
 /nnue-pytorch/nnue-pytorch/*.user
+/nnue-pytorch/nnue-pytorch/x64/
 /nnue-pytorch/x64
