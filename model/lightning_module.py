@@ -36,7 +36,7 @@ class NNUE(L.LightningModule):
         gamma=0.992,
         lr=8.75e-4,
         param_index=0,
-        num_ls_buckets=9,
+        num_ls_buckets=8,
         loss_params=LossParams(),
     ):
         super().__init__()

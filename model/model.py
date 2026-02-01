@@ -13,7 +13,7 @@ class NNUEModel(nn.Module):
         feature_set: FeatureSet,
         config: ModelConfig,
         quantize_config: QuantizationConfig,
-        num_ls_buckets: int = 9,
+        num_ls_buckets: int = 8,
     ):
         super().__init__()
 

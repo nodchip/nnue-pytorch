@@ -5,6 +5,7 @@
 #include <iterator>
 #include <future>
 #include <mutex>
+#include <atomic>
 #include <thread>
 #include <deque>
 #include <random>
@@ -13,6 +14,7 @@
 #include "lib/rng.h"
 
 #include "YaneuraOu/source/usi.h"
+#include "tanuki_progress.h"
 
 #if defined (__x86_64__)
 #define EXPORT
@@ -27,6 +29,12 @@
 #endif
 #endif
 
+namespace {
+    std::once_flag INITIALIZED;
+    Tanuki::Progress TANUKI_PROGRESS;
+    std::atomic_bool TANUKI_PROGRESS_LOADED = false;
+}
+
 struct HalfKA_hm {
     static constexpr int NUM_SQ = 81;
     static constexpr int INPUTS = 5 * static_cast<int>(FILE_NB) * static_cast<int>(Eval::BonaPiece::e_king);
@@ -35,18 +43,18 @@ struct HalfKA_hm {
 
     static int make_index(Square sq_k, Eval::BonaPiece p) {
         if (sq_k >= SQ_61) {
-            // 玉が6筋～9筋にいる場合、4筋～1筋に反転する。
+            // Mirror king square in the enemy camp for symmetry.
             sq_k = Mir(sq_k);
 
             if (p >= Eval::BonaPiece::fe_hand_end) {
-                // 持駒は反転しない。
+                // Mirror board squares for on-board pieces as well.
                 int piece_index = (p - Eval::BonaPiece::fe_hand_end) / SQ_NB;
                 Square sq_p = static_cast<Square>((p - Eval::BonaPiece::fe_hand_end) % SQ_NB);
                 sq_p = Mir(sq_p);
                 p = static_cast<Eval::BonaPiece>(Eval::BonaPiece::fe_hand_end + piece_index * static_cast<int>(SQ_NB) + sq_p);
             }
         }
-        // 後手玉は自玉と同じPLANEに持っていく
+        // Map king square + piece to the final feature index.
         return static_cast<int>(Eval::BonaPiece::e_king) * static_cast<int>(sq_k) + static_cast<int>(p >= Eval::BonaPiece::e_king ? p - SQ_NB : p);
     }
 
@@ -158,17 +166,14 @@ struct SparseBatch
 
 private:
 
-    // ���C���[�X�^�b�N�̑I���B�o���̋ʂ̒i�ɉ�����9�ʂ�ɕ��򂳂���B
-    static constexpr int kLayerStacks = 9;
+    // Bucket selection based on progress (0..1) using 8 buckets.
+    static constexpr int kLayerStacks = 8;
     static int stack_index_for_nnue(const Position& pos) {
-        constexpr int kFToIndex[] = { 0, 0, 0, 3, 3, 3, 6, 6, 6 };
-        constexpr int kEToIndex[] = { 0, 0, 0, 1, 1, 1, 2, 2, 2 };
-        const auto stm = pos.side_to_move();
-        const auto f_king = pos.king_square(stm);
-        const auto e_king = pos.king_square(~stm);
-        const auto f_rank = stm == BLACK ? rank_of(f_king) : rank_of(Inv(f_king));
-        const auto e_rank = stm == BLACK ? rank_of(Inv(e_king)) : rank_of(e_king);
-        int idx = kFToIndex[f_rank] + kEToIndex[e_rank];
+        double progress = 0.0;
+        if (TANUKI_PROGRESS_LOADED.load()) {
+            progress = TANUKI_PROGRESS.Estimate(pos);
+        }
+        int idx = static_cast<int>(progress * static_cast<double>(kLayerStacks));
         if (idx < 0) idx = 0;
         if (idx >= kLayerStacks) idx = kLayerStacks - 1;
         return idx;
@@ -382,10 +387,6 @@ std::function<bool(const shogi::TrainingDataEntry&)> make_skip_predicate(Dataloa
     return nullptr;
 }
 
-namespace {
-    std::once_flag INITIALIZED;
-}
-
 extern "C" {
 
     // changing the signature needs matching changes in data_loader/_native.py
@@ -393,7 +394,8 @@ extern "C" {
     {
         auto initialize = []() {
             USI::init(Options);
-            //Bitboards::init();
+            Tanuki::Progress::Initialize(Options);
+            Bitboards::init();
             //Position::init();
             //Search::init();
 
@@ -402,6 +404,10 @@ extern "C" {
             //Eval::init();
 
             is_ready();
+            TANUKI_PROGRESS_LOADED = TANUKI_PROGRESS.Load();
+            if (!TANUKI_PROGRESS_LOADED.load()) {
+                fprintf(stderr, "Failed to load tanuki progress weights. Falling back to zero progress.\n");
+            }
             };
         std::call_once(INITIALIZED, initialize);
 
@@ -471,6 +477,7 @@ int main(int argc, char** argv)
 #ifdef PGO_BUILD
     const int concurrency = 1;
 #else
+    //const int concurrency = std::thread::hardware_concurrency();
     const int concurrency = std::thread::hardware_concurrency();
 #endif
     // some typical numbers, more skipping means more load
@@ -484,7 +491,7 @@ int main(int argc, char** argv)
         .simple_eval_skipping = 0,
         .param_index = 0
     };
-    auto stream = create_sparse_batch_stream("HalfKA_hm^", concurrency, file_count, files, batch_size, cyclic, config);
+    auto stream = create_sparse_batch_stream("HalfKA_hm", concurrency, file_count, files, batch_size, cyclic, config);
 
     auto t0 = std::chrono::high_resolution_clock::now();
 
