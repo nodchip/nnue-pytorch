@@ -73,6 +73,7 @@ else()
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_PGO_USE}")
     endif()
     add_library(training_data_loader SHARED training_data_loader.cpp tanuki_progress.cpp)
+    target_compile_definitions(training_data_loader PRIVATE YANEURAOU_ENGINE_NNUE EVAL_LEARN)
     target_link_libraries(training_data_loader Threads::Threads)
     install(
       TARGETS training_data_loader

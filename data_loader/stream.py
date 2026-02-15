@@ -1,6 +1,12 @@
 import ctypes
 
-from ._native import c_lib, SparseBatchPtr, FenBatchPtr
+from ._native import (
+    c_lib,
+    SparseBatchPtr,
+    FenBatchPtr,
+    ProgressBatchPtr,
+    ProgressSfenBatchPtr,
+)
 from .config import CDataloaderSkipConfig, DataloaderSkipConfig
 
 
@@ -86,3 +92,93 @@ def fetch_next_sparse_batch(stream: ctypes.c_void_p) -> SparseBatchPtr:
 
 def destroy_sparse_batch(batch: SparseBatchPtr):
     c_lib.dll.destroy_sparse_batch(batch)
+
+
+def create_progress_batch_stream(
+    concurrency,
+    filenames: list[str],
+    batch_size,
+    cyclic,
+    config: DataloaderSkipConfig,
+) -> ctypes.c_void_p:
+    if not c_lib.has_progress_api:
+        raise RuntimeError(
+            "Progress batch API is unavailable. Rebuild training_data_loader library."
+        )
+    return c_lib.dll.create_progress_batch_stream(
+        concurrency,
+        len(filenames),
+        _to_c_str_array(filenames),
+        batch_size,
+        cyclic,
+        CDataloaderSkipConfig(config),
+    )
+
+
+def destroy_progress_batch_stream(stream: ctypes.c_void_p):
+    if not c_lib.has_progress_api:
+        raise RuntimeError(
+            "Progress batch API is unavailable. Rebuild training_data_loader library."
+        )
+    c_lib.dll.destroy_progress_batch_stream(stream)
+
+
+def fetch_next_progress_batch(stream: ctypes.c_void_p) -> ProgressBatchPtr:
+    if not c_lib.has_progress_api:
+        raise RuntimeError(
+            "Progress batch API is unavailable. Rebuild training_data_loader library."
+        )
+    return c_lib.dll.fetch_next_progress_batch(stream)
+
+
+def destroy_progress_batch(batch: ProgressBatchPtr):
+    if not c_lib.has_progress_api:
+        raise RuntimeError(
+            "Progress batch API is unavailable. Rebuild training_data_loader library."
+        )
+    c_lib.dll.destroy_progress_batch(batch)
+
+
+def create_progress_sfen_batch_stream(
+    concurrency,
+    filenames: list[str],
+    batch_size,
+    cyclic,
+    config: DataloaderSkipConfig,
+) -> ctypes.c_void_p:
+    if not c_lib.has_progress_sfen_api:
+        raise RuntimeError(
+            "Progress SFEN batch API is unavailable. Rebuild training_data_loader library."
+        )
+    return c_lib.dll.create_progress_sfen_batch_stream(
+        concurrency,
+        len(filenames),
+        _to_c_str_array(filenames),
+        batch_size,
+        cyclic,
+        CDataloaderSkipConfig(config),
+    )
+
+
+def destroy_progress_sfen_batch_stream(stream: ctypes.c_void_p):
+    if not c_lib.has_progress_sfen_api:
+        raise RuntimeError(
+            "Progress SFEN batch API is unavailable. Rebuild training_data_loader library."
+        )
+    c_lib.dll.destroy_progress_sfen_batch_stream(stream)
+
+
+def fetch_next_progress_sfen_batch(stream: ctypes.c_void_p) -> ProgressSfenBatchPtr:
+    if not c_lib.has_progress_sfen_api:
+        raise RuntimeError(
+            "Progress SFEN batch API is unavailable. Rebuild training_data_loader library."
+        )
+    return c_lib.dll.fetch_next_progress_sfen_batch(stream)
+
+
+def destroy_progress_sfen_batch(batch: ProgressSfenBatchPtr):
+    if not c_lib.has_progress_sfen_api:
+        raise RuntimeError(
+            "Progress SFEN batch API is unavailable. Rebuild training_data_loader library."
+        )
+    c_lib.dll.destroy_progress_sfen_batch(batch)

@@ -99,6 +99,64 @@ class SparseBatch(ctypes.Structure):
         )
 
 
+class ProgressBatch(ctypes.Structure):
+    _fields_ = [
+        ("size", ctypes.c_int),
+        ("indices_per_position", ctypes.c_int),
+        ("num_weights", ctypes.c_int),
+        ("ply", ctypes.POINTER(ctypes.c_uint16)),
+        ("indices", ctypes.POINTER(ctypes.c_int)),
+    ]
+
+    def get_tensors(self, device):
+        plies = (
+            torch.from_numpy(np.ctypeslib.as_array(self.ply, shape=(self.size,)))
+            .long()
+            .to(device=device, non_blocking=True)
+        )
+        indices = (
+            torch.from_numpy(
+                np.ctypeslib.as_array(
+                    self.indices,
+                    shape=(self.size, self.indices_per_position),
+                )
+            )
+            .long()
+            .to(device=device, non_blocking=True)
+        )
+        return plies, indices, self.num_weights
+
+
+class ProgressSfenBatch(ctypes.Structure):
+    _fields_ = [
+        ("size", ctypes.c_int),
+        ("indices_per_position", ctypes.c_int),
+        ("num_weights", ctypes.c_int),
+        ("ply", ctypes.POINTER(ctypes.c_uint16)),
+        ("indices", ctypes.POINTER(ctypes.c_int)),
+        ("sfens", ctypes.POINTER(ctypes.c_char_p)),
+    ]
+
+    def get_items(self, device):
+        plies = (
+            torch.from_numpy(np.ctypeslib.as_array(self.ply, shape=(self.size,)))
+            .long()
+            .to(device=device, non_blocking=True)
+        )
+        indices = (
+            torch.from_numpy(
+                np.ctypeslib.as_array(
+                    self.indices,
+                    shape=(self.size, self.indices_per_position),
+                )
+            )
+            .long()
+            .to(device=device, non_blocking=True)
+        )
+        sfens = [self.sfens[i].decode("utf-8") for i in range(self.size)]
+        return plies, indices, sfens, self.num_weights
+
+
 class Fen(ctypes.Structure):
     _fields_ = [("size", ctypes.c_int), ("fen", ctypes.c_char_p)]
 
@@ -116,6 +174,8 @@ class FenBatch(ctypes.Structure):
 class CDataLoaderAPI:
     def __init__(self):
         self.dll = self._load_library()
+        self.has_progress_api = False
+        self.has_progress_sfen_api = False
         self._define_prototypes()
 
     def _load_library(self):
@@ -155,9 +215,62 @@ class CDataLoaderAPI:
         self.dll.fetch_next_sparse_batch.restype = ctypes.POINTER(SparseBatch)
         self.dll.fetch_next_sparse_batch.argtypes = [ctypes.c_void_p]
 
+        # EXPORT Stream<ProgressBatch>* CDECL create_progress_batch_stream(
+        #     int concurrency,
+        #     int num_files,
+        #     const char* const* filenames,
+        #     int batch_size,
+        #     bool cyclic,
+        #     DataloaderSkipConfig config
+        # )
+        try:
+            self.dll.create_progress_batch_stream.restype = ctypes.c_void_p
+            self.dll.create_progress_batch_stream.argtypes = [
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.POINTER(ctypes.c_char_p),
+                ctypes.c_int,
+                ctypes.c_bool,
+                CDataloaderSkipConfig,
+            ]
+
+            self.dll.destroy_progress_batch_stream.argtypes = [ctypes.c_void_p]
+
+            self.dll.fetch_next_progress_batch.restype = ctypes.POINTER(ProgressBatch)
+            self.dll.fetch_next_progress_batch.argtypes = [ctypes.c_void_p]
+
+            self.dll.destroy_progress_batch.argtypes = [ctypes.POINTER(ProgressBatch)]
+            self.has_progress_api = True
+        except AttributeError:
+            self.has_progress_api = False
+
+        try:
+            self.dll.create_progress_sfen_batch_stream.restype = ctypes.c_void_p
+            self.dll.create_progress_sfen_batch_stream.argtypes = [
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.POINTER(ctypes.c_char_p),
+                ctypes.c_int,
+                ctypes.c_bool,
+                CDataloaderSkipConfig,
+            ]
+            self.dll.destroy_progress_sfen_batch_stream.argtypes = [ctypes.c_void_p]
+            self.dll.fetch_next_progress_sfen_batch.restype = ctypes.POINTER(
+                ProgressSfenBatch
+            )
+            self.dll.fetch_next_progress_sfen_batch.argtypes = [ctypes.c_void_p]
+            self.dll.destroy_progress_sfen_batch.argtypes = [
+                ctypes.POINTER(ProgressSfenBatch)
+            ]
+            self.has_progress_sfen_api = True
+        except AttributeError:
+            self.has_progress_sfen_api = False
+
 
 type SparseBatchPtr = ctypes._Pointer[SparseBatch]
 type FenBatchPtr = ctypes._Pointer[FenBatch]
+type ProgressBatchPtr = ctypes._Pointer[ProgressBatch]
+type ProgressSfenBatchPtr = ctypes._Pointer[ProgressSfenBatch]
 
 
 try:

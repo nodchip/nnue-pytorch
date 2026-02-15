@@ -134,6 +134,44 @@ class SparseBatchProvider(TrainingDataProvider):
         )
 
 
+class ProgressBatchProvider:
+    def __init__(
+        self,
+        filenames: list[str],
+        batch_size,
+        cyclic=False,
+        num_workers=1,
+        config: DataloaderSkipConfig = DataloaderSkipConfig(),
+    ):
+        self.filenames = filenames
+        self.batch_size = batch_size
+        self.cyclic = cyclic
+        self.num_workers = num_workers
+        self.config = config
+        self.stream = stream.create_progress_batch_stream(
+            self.num_workers,
+            self.filenames,
+            self.batch_size,
+            self.cyclic,
+            self.config,
+        )
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        v = stream.fetch_next_progress_batch(self.stream)
+        if v:
+            tensors = v.contents.get_tensors("cpu")
+            stream.destroy_progress_batch(v)
+            return tensors
+        raise StopIteration
+
+    def __del__(self):
+        if hasattr(self, "stream"):
+            stream.destroy_progress_batch_stream(self.stream)
+
+
 class SparseBatchDataset(torch.utils.data.IterableDataset):
     def __init__(
         self,
@@ -155,6 +193,96 @@ class SparseBatchDataset(torch.utils.data.IterableDataset):
     def __iter__(self):
         return SparseBatchProvider(
             self.feature_set,
+            self.filenames,
+            self.batch_size,
+            cyclic=self.cyclic,
+            num_workers=self.num_workers,
+            config=self.config,
+        )
+
+
+class ProgressBatchDataset(torch.utils.data.IterableDataset):
+    def __init__(
+        self,
+        filenames: list[str],
+        batch_size,
+        cyclic=False,
+        num_workers=1,
+        config: DataloaderSkipConfig = DataloaderSkipConfig(),
+    ):
+        super().__init__()
+        self.filenames = filenames
+        self.batch_size = batch_size
+        self.cyclic = cyclic
+        self.num_workers = num_workers
+        self.config = config
+
+    def __iter__(self):
+        return ProgressBatchProvider(
+            self.filenames,
+            self.batch_size,
+            cyclic=self.cyclic,
+            num_workers=self.num_workers,
+            config=self.config,
+        )
+
+
+class ProgressSfenBatchProvider:
+    def __init__(
+        self,
+        filenames: list[str],
+        batch_size,
+        cyclic=False,
+        num_workers=1,
+        config: DataloaderSkipConfig = DataloaderSkipConfig(),
+    ):
+        self.filenames = filenames
+        self.batch_size = batch_size
+        self.cyclic = cyclic
+        self.num_workers = num_workers
+        self.config = config
+        self.stream = stream.create_progress_sfen_batch_stream(
+            self.num_workers,
+            self.filenames,
+            self.batch_size,
+            self.cyclic,
+            self.config,
+        )
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        v = stream.fetch_next_progress_sfen_batch(self.stream)
+        if v:
+            items = v.contents.get_items("cpu")
+            stream.destroy_progress_sfen_batch(v)
+            return items
+        raise StopIteration
+
+    def __del__(self):
+        if hasattr(self, "stream"):
+            stream.destroy_progress_sfen_batch_stream(self.stream)
+
+
+class ProgressSfenBatchDataset(torch.utils.data.IterableDataset):
+    def __init__(
+        self,
+        filenames: list[str],
+        batch_size,
+        cyclic=False,
+        num_workers=1,
+        config: DataloaderSkipConfig = DataloaderSkipConfig(),
+    ):
+        super().__init__()
+        self.filenames = filenames
+        self.batch_size = batch_size
+        self.cyclic = cyclic
+        self.num_workers = num_workers
+        self.config = config
+
+    def __iter__(self):
+        return ProgressSfenBatchProvider(
             self.filenames,
             self.batch_size,
             cyclic=self.cyclic,

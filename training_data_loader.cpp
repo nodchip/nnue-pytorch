@@ -9,6 +9,7 @@
 #include <thread>
 #include <deque>
 #include <random>
+#include <cstring>
 
 #include "lib/nnue_training_data_stream.h"
 #include "lib/rng.h"
@@ -202,6 +203,122 @@ private:
     }
 };
 
+struct ProgressBatch
+{
+    // tanuki_progress.cpp と同じ添字系で学習用入力を返すバッチ。
+    static constexpr bool IS_BATCH = true;
+    static constexpr int PIECES_PER_SIDE = PIECE_NUMBER_KING;
+    static constexpr int INDICES_PER_POSITION = PIECES_PER_SIDE * 2;
+    static constexpr int NUM_WEIGHTS = static_cast<int>(SQ_NB) * static_cast<int>(Eval::BonaPiece::fe_end);
+
+    ProgressBatch(const std::vector<shogi::TrainingDataEntry>& entries)
+    {
+        size = static_cast<int>(entries.size());
+        indices_per_position = INDICES_PER_POSITION;
+        num_weights = NUM_WEIGHTS;
+        ply = new std::uint16_t[size];
+        indices = new int[size * INDICES_PER_POSITION];
+
+        for (int i = 0; i < size; ++i)
+        {
+            fill_entry(i, entries[i]);
+        }
+    }
+
+    int size;
+    int indices_per_position;
+    int num_weights;
+    std::uint16_t* ply;
+    int* indices;
+
+    ~ProgressBatch()
+    {
+        delete[] ply;
+        delete[] indices;
+    }
+
+private:
+    void fill_entry(int i, const shogi::TrainingDataEntry& e)
+    {
+        ply[i] = e.ply;
+        const auto& pos = *e.pos;
+        const auto sq_bk = pos.king_square(BLACK);
+        const auto sq_wk = Inv(pos.king_square(WHITE));
+        const auto& list0 = pos.eval_list()->piece_list_fb();
+        const auto& list1 = pos.eval_list()->piece_list_fw();
+        const int offset = i * INDICES_PER_POSITION;
+        for (int j = 0; j < PIECES_PER_SIDE; ++j)
+        {
+            indices[offset + j] = static_cast<int>(sq_bk) * static_cast<int>(Eval::BonaPiece::fe_end) + list0[j];
+            indices[offset + PIECES_PER_SIDE + j] = static_cast<int>(sq_wk) * static_cast<int>(Eval::BonaPiece::fe_end) + list1[j];
+        }
+    }
+};
+
+struct ProgressSfenBatch
+{
+    static constexpr bool IS_BATCH = true;
+    static constexpr int PIECES_PER_SIDE = PIECE_NUMBER_KING;
+    static constexpr int INDICES_PER_POSITION = PIECES_PER_SIDE * 2;
+    static constexpr int NUM_WEIGHTS = static_cast<int>(SQ_NB) * static_cast<int>(Eval::BonaPiece::fe_end);
+
+    ProgressSfenBatch(const std::vector<shogi::TrainingDataEntry>& entries)
+    {
+        size = static_cast<int>(entries.size());
+        indices_per_position = INDICES_PER_POSITION;
+        num_weights = NUM_WEIGHTS;
+        ply = new std::uint16_t[size];
+        indices = new int[size * INDICES_PER_POSITION];
+        sfens = new char* [size];
+        for (int i = 0; i < size; ++i)
+        {
+            sfens[i] = nullptr;
+            fill_entry(i, entries[i]);
+        }
+    }
+
+    int size;
+    int indices_per_position;
+    int num_weights;
+    std::uint16_t* ply;
+    int* indices;
+    char** sfens;
+
+    ~ProgressSfenBatch()
+    {
+        if (sfens != nullptr)
+        {
+            for (int i = 0; i < size; ++i)
+            {
+                delete[] sfens[i];
+            }
+        }
+        delete[] sfens;
+        delete[] ply;
+        delete[] indices;
+    }
+
+private:
+    void fill_entry(int i, const shogi::TrainingDataEntry& e)
+    {
+        ply[i] = e.ply;
+        const auto& pos = *e.pos;
+        const auto sq_bk = pos.king_square(BLACK);
+        const auto sq_wk = Inv(pos.king_square(WHITE));
+        const auto& list0 = pos.eval_list()->piece_list_fb();
+        const auto& list1 = pos.eval_list()->piece_list_fw();
+        const int offset = i * INDICES_PER_POSITION;
+        for (int j = 0; j < PIECES_PER_SIDE; ++j)
+        {
+            indices[offset + j] = static_cast<int>(sq_bk) * static_cast<int>(Eval::BonaPiece::fe_end) + list0[j];
+            indices[offset + PIECES_PER_SIDE + j] = static_cast<int>(sq_wk) * static_cast<int>(Eval::BonaPiece::fe_end) + list1[j];
+        }
+        const std::string sfen = pos.sfen(e.ply);
+        sfens[i] = new char[sfen.size() + 1];
+        std::memcpy(sfens[i], sfen.c_str(), sfen.size() + 1);
+    }
+};
+
 struct AnyStream
 {
     virtual ~AnyStream() = default;
@@ -243,6 +360,36 @@ struct AsyncStream : Stream<StorageT>
 
 protected:
     std::future<StorageT*> m_next;
+};
+
+template <typename StorageT>
+struct OrderedBatchStream : Stream<StorageT>
+{
+    // ファイル順序を保ったまま固定サイズでバッチ化するストリーム。
+    static_assert(StorageT::IS_BATCH);
+
+    using BaseType = Stream<StorageT>;
+
+    OrderedBatchStream(int concurrency, const std::vector<std::string>& filenames, int batch_size, bool cyclic, std::function<bool(const shogi::TrainingDataEntry&)> skipPredicate) :
+        BaseType(concurrency, filenames, cyclic, skipPredicate),
+        m_batch_size(batch_size)
+    {
+    }
+
+    StorageT* next() override
+    {
+        std::vector<shogi::TrainingDataEntry> entries;
+        entries.reserve(m_batch_size);
+        BaseType::m_stream->fill(entries, m_batch_size);
+        if (entries.empty())
+        {
+            return nullptr;
+        }
+        return new StorageT(entries);
+    }
+
+private:
+    int m_batch_size;
 };
 
 template <typename FeatureSetT, typename StorageT>
@@ -434,6 +581,80 @@ extern "C" {
     }
 
     EXPORT void CDECL destroy_sparse_batch(SparseBatch* e)
+    {
+        delete e;
+    }
+
+    EXPORT Stream<ProgressBatch>* CDECL create_progress_batch_stream(int concurrency, int num_files, const char* const* filenames, int batch_size, bool cyclic, DataloaderSkipConfig config)
+    {
+        auto initialize = []() {
+            USI::init(Options);
+            Tanuki::Progress::Initialize(Options);
+            Bitboards::init();
+
+            Threads.set(1);
+
+            is_ready();
+            TANUKI_PROGRESS_LOADED = TANUKI_PROGRESS.Load();
+            if (!TANUKI_PROGRESS_LOADED.load()) {
+                fprintf(stderr, "Failed to load tanuki progress weights. Falling back to zero progress.\n");
+            }
+            };
+        std::call_once(INITIALIZED, initialize);
+
+        auto skipPredicate = make_skip_predicate(config);
+        auto filenames_vec = std::vector<std::string>(filenames, filenames + num_files);
+        return new OrderedBatchStream<ProgressBatch>(concurrency, filenames_vec, batch_size, cyclic, skipPredicate);
+    }
+
+    EXPORT void CDECL destroy_progress_batch_stream(Stream<ProgressBatch>* stream)
+    {
+        delete stream;
+    }
+
+    EXPORT ProgressBatch* CDECL fetch_next_progress_batch(Stream<ProgressBatch>* stream)
+    {
+        return stream->next();
+    }
+
+    EXPORT void CDECL destroy_progress_batch(ProgressBatch* e)
+    {
+        delete e;
+    }
+
+    EXPORT Stream<ProgressSfenBatch>* CDECL create_progress_sfen_batch_stream(int concurrency, int num_files, const char* const* filenames, int batch_size, bool cyclic, DataloaderSkipConfig config)
+    {
+        auto initialize = []() {
+            USI::init(Options);
+            Tanuki::Progress::Initialize(Options);
+            Bitboards::init();
+
+            Threads.set(1);
+
+            is_ready();
+            TANUKI_PROGRESS_LOADED = TANUKI_PROGRESS.Load();
+            if (!TANUKI_PROGRESS_LOADED.load()) {
+                fprintf(stderr, "Failed to load tanuki progress weights. Falling back to zero progress.\n");
+            }
+            };
+        std::call_once(INITIALIZED, initialize);
+
+        auto skipPredicate = make_skip_predicate(config);
+        auto filenames_vec = std::vector<std::string>(filenames, filenames + num_files);
+        return new OrderedBatchStream<ProgressSfenBatch>(concurrency, filenames_vec, batch_size, cyclic, skipPredicate);
+    }
+
+    EXPORT void CDECL destroy_progress_sfen_batch_stream(Stream<ProgressSfenBatch>* stream)
+    {
+        delete stream;
+    }
+
+    EXPORT ProgressSfenBatch* CDECL fetch_next_progress_sfen_batch(Stream<ProgressSfenBatch>* stream)
+    {
+        return stream->next();
+    }
+
+    EXPORT void CDECL destroy_progress_sfen_batch(ProgressSfenBatch* e)
     {
         delete e;
     }
