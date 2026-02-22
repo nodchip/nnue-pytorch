@@ -1,9 +1,30 @@
 import argparse
-import chess
 import numpy as np
 import matplotlib.pyplot as plt
 
 import model as M
+
+
+def select_input_layout(features_name: str, num_real_features: int) -> str:
+    """入力重み可視化のレイアウトを特徴量セットから判定する。"""
+    chess_features = {"HalfKAv2_hm", "HalfKAv2_hm^"}
+    if features_name in chess_features and num_real_features % 704 == 0:
+        return "chess"
+    return "generic"
+
+
+def _chess_square_name(square: int) -> str:
+    """0始まりのマス番号をチェス表記へ変換する。"""
+    files = "abcdefgh"
+    return "{}{}".format(files[square % 8], square // 8 + 1)
+
+
+def _chess_piece_name(piece_type: int) -> str:
+    """駒種インデックスをチェス駒名へ変換する。"""
+    names = ["pawn", "knight", "bishop", "rook", "queen", "king"]
+    if 0 <= piece_type < len(names):
+        return names[piece_type]
+    return "piece{}".format(piece_type + 1)
 
 
 class NNUEVisualizer:
@@ -37,19 +58,77 @@ class NNUEVisualizer:
             else:
                 plt.savefig(destname)
 
+    def _plot_generic_input_weights(self, weights_matrix):
+        """汎用レイアウトで入力重みを可視化する。"""
+        if self.args.input_weights_auto_scale:
+            vmin = None
+            vmax = None
+        else:
+            vmin = self.args.input_weights_vmin
+            vmax = self.args.input_weights_vmax
+
+        img = weights_matrix[:, self.sorted_input_neurons]
+
+        if self.args.input_weights_auto_scale or self.args.input_weights_vmin < 0:
+            title_template = "input weights [{LABEL}]"
+            hist_title_template = "input weights histogram [{LABEL}]"
+            cmap = "coolwarm"
+        else:
+            img = np.abs(img)
+            title_template = "abs(input weights) [{LABEL}]"
+            hist_title_template = "abs(input weights) histogram [{LABEL}]"
+            cmap = "viridis"
+
+        plt.figure(
+            figsize=(
+                self.args.default_width // self.dpi,
+                self.args.default_height // self.dpi,
+            )
+        )
+        plt.matshow(img, fignum=0, vmin=vmin, vmax=vmax, cmap=cmap, aspect="auto")
+        plt.colorbar(fraction=0.046, pad=0.04)
+        plt.xlabel("input neuron")
+        plt.ylabel("feature index")
+        plt.title(title_template.format(LABEL=self.args.label))
+        plt.tight_layout()
+
+        def format_coord(x, y):
+            x, y = int(round(x)), int(round(y))
+            if x < 0 or y < 0 or x >= img.shape[1] or y >= img.shape[0]:
+                return ""
+
+            if self.args.sort_input_neurons:
+                neuron_label = "sorted neuron {} (original {})".format(
+                    x, self.sorted_input_neurons[x]
+                )
+            else:
+                neuron_label = "neuron {}".format(x)
+            return "{}, feature {}".format(neuron_label, y)
+
+        ax = plt.gca()
+        ax.format_coord = format_coord
+
+        self._process_fig("input-weights")
+        if not self.args.no_hist:
+            plt.figure()
+            plt.hist(img.flatten(), log=True, bins=256)
+            plt.title(hist_title_template.format(LABEL=self.args.label))
+            plt.tight_layout()
+            self._process_fig("input-weights-histogram")
+
     def plot_input_weights(self):
         # Coalesce weights and transform them to Numpy domain.
-        weights = M.coalesce_ft_weights(self.model.feature_set, self.model.input)
-        weights = weights[:, : self.model.L1]
-        weights = weights.flatten().numpy()
+        weights_matrix = M.coalesce_ft_weights(
+            self.model.feature_set, self.model.input
+        )
+        weights_matrix = weights_matrix[:, : self.model.L1].numpy()
 
         if self.args.ref_model:
             ref_weights = M.coalesce_ft_weights(
                 self.ref_model.feature_set, self.ref_model.input
             )
-            ref_weights = ref_weights[:, : self.model.L1]
-            ref_weights = ref_weights.flatten().numpy()
-            weights -= ref_weights
+            ref_weights = ref_weights[:, : self.model.L1].numpy()
+            weights_matrix -= ref_weights
 
         hd = self.model.L1  # Number of input neurons.
         self.M = hd
@@ -73,13 +152,20 @@ class NNUEVisualizer:
 
         if self.args.sort_input_neurons:
             # Sort input neurons by the L1-norm of their associated weights.
-            neuron_weights_norm = np.zeros(hd)
-            for i in range(hd):
-                neuron_weights_norm[i] = np.sum(np.abs(weights[i::hd]))
-
+            neuron_weights_norm = np.sum(np.abs(weights_matrix), axis=0)
             self.sorted_input_neurons = np.flip(np.argsort(neuron_weights_norm))
         else:
             self.sorted_input_neurons = np.arange(hd, dtype=int)
+
+        input_layout = select_input_layout(
+            self.args.features, self.model.feature_set.num_real_features
+        )
+        if input_layout != "chess":
+            if not self.args.no_input_weights:
+                self._plot_generic_input_weights(weights_matrix)
+            return
+
+        weights = weights_matrix.flatten()
 
         # fmt: off
         KingBuckets = [
@@ -254,29 +340,29 @@ class NNUEVisualizer:
                 piece_type = (y_ + 16) // 64
                 piece_name = "{} {}".format(
                     "white" if x_ // (widthx // 2) == 0 else "black",
-                    chess.piece_name(piece_type + 1),
+                    _chess_piece_name(piece_type),
                 )
 
                 x_ = x_ % (widthx // 2)
                 y_ = (y_ + 16) % 64 if y_ >= 48 else y_ + 8
                 if default_order:
                     # Piece centric, flipped king.
-                    piece_square_name = chess.square_name(x_ // 8 + 8 * (7 - y_ // 8))
-                    king_square_name = chess.square_name(7 - (x_ % 8) + 8 * (y_ % 8))
+                    piece_square_name = _chess_square_name(x_ // 8 + 8 * (7 - y_ // 8))
+                    king_square_name = _chess_square_name(7 - (x_ % 8) + 8 * (y_ % 8))
                 else:
                     # King centric.
                     if piece_type == 0:
-                        piece_square_name = chess.square_name(
+                        piece_square_name = _chess_square_name(
                             x_ % 8 + 8 * (6 - ((y_ - 8) % 6))
                         )
-                        king_square_name = chess.square_name(
+                        king_square_name = _chess_square_name(
                             x_ // 8 + 8 * (7 - (y_ - 8) // 6)
                         )
                     else:
-                        piece_square_name = chess.square_name(
+                        piece_square_name = _chess_square_name(
                             x_ % 8 + 8 * (7 - (y_ % 8))
                         )
-                        king_square_name = chess.square_name(
+                        king_square_name = _chess_square_name(
                             x_ // 8 + 8 * (7 - y_ // 8)
                         )
 
@@ -655,7 +741,7 @@ def main():
     M.add_feature_args(parser)
     args = parser.parse_args()
 
-    supported_features = ("HalfKAv2_hm", "HalfKAv2_hm^")
+    supported_features = ("HalfKAv2_hm", "HalfKAv2_hm^", "HalfKA_hm", "HalfKA_hm^")
     assert args.features in supported_features
     feature_set = M.get_feature_set_from_name(args.features)
 
