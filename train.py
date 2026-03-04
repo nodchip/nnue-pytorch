@@ -41,6 +41,30 @@ class TimeLimitAfterCheckpoint(Callback):
             )
 
 
+class ResetStepLROnResume(Callback):
+    """resume-from-checkpoint時にStepLR状態のみ初期化する。"""
+
+    def __init__(self, enabled: bool, initial_lr: float):
+        self.enabled = enabled
+        self.initial_lr = initial_lr
+
+    def on_load_checkpoint(self, trainer, pl_module, checkpoint):
+        _ = trainer  # unused
+        _ = pl_module  # unused
+        if not self.enabled:
+            return
+
+        # schedulerの復元状態を削除して、StepLRを初期状態で再開する。
+        checkpoint.pop("lr_schedulers", None)
+
+        # optimizerの現在lrとinitial_lrを初期値に戻す。
+        for optimizer_state in checkpoint.get("optimizer_states", []):
+            for param_group in optimizer_state.get("param_groups", []):
+                param_group["lr"] = self.initial_lr
+                if "initial_lr" in param_group:
+                    param_group["initial_lr"] = self.initial_lr
+
+
 def make_data_loaders(
     train_filenames,
     val_filenames,
@@ -285,6 +309,13 @@ def main():
         help="Initializes training using a given .ckpt model",
     )
     parser.add_argument(
+        "--reset-step-lr-on-resume",
+        type=str2bool,
+        default=False,
+        dest="reset_step_lr_on_resume",
+        help="Whether to reset StepLR when resuming from checkpoint.",
+    )
+    parser.add_argument(
         "--network-save-period",
         type=int,
         default=20,
@@ -459,6 +490,12 @@ def main():
             TQDMProgressBar(refresh_rate=300),
             TimeLimitAfterCheckpoint(args.max_time),
             M.WeightClippingCallback(),
+            ResetStepLROnResume(
+                enabled=bool(
+                    args.resume_from_checkpoint and args.reset_step_lr_on_resume
+                ),
+                initial_lr=args.lr,
+            ),
         ],
         enable_progress_bar=True,
         enable_checkpointing=True,
