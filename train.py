@@ -44,25 +44,38 @@ class TimeLimitAfterCheckpoint(Callback):
 class ResetStepLROnResume(Callback):
     """resume-from-checkpoint時にStepLR状態のみ初期化する。"""
 
-    def __init__(self, enabled: bool, initial_lr: float):
+    def __init__(self, enabled: bool, initial_lr: float, gamma: float):
         self.enabled = enabled
         self.initial_lr = initial_lr
+        self.gamma = gamma
 
-    def on_load_checkpoint(self, trainer, pl_module, checkpoint):
-        _ = trainer  # unused
+    def _reset_optimizer_lrs(self, trainer):
+        for optimizer in trainer.optimizers:
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = self.initial_lr
+                if "initial_lr" in param_group:
+                    param_group["initial_lr"] = self.initial_lr
+
+    def _reset_step_lr_state(self, trainer):
+        for config in getattr(trainer, "lr_scheduler_configs", []):
+            scheduler = config.scheduler
+            if not isinstance(scheduler, torch.optim.lr_scheduler.StepLR):
+                continue
+
+            num_param_groups = len(scheduler.optimizer.param_groups)
+            scheduler.gamma = self.gamma
+            scheduler.base_lrs = [self.initial_lr] * num_param_groups
+            scheduler.last_epoch = 0
+            scheduler._step_count = 1
+            scheduler._last_lr = [self.initial_lr] * num_param_groups
+
+    def on_fit_start(self, trainer, pl_module):
         _ = pl_module  # unused
         if not self.enabled:
             return
 
-        # schedulerの復元状態を削除して、StepLRを初期状態で再開する。
-        checkpoint.pop("lr_schedulers", None)
-
-        # optimizerの現在lrとinitial_lrを初期値に戻す。
-        for optimizer_state in checkpoint.get("optimizer_states", []):
-            for param_group in optimizer_state.get("param_groups", []):
-                param_group["lr"] = self.initial_lr
-                if "initial_lr" in param_group:
-                    param_group["initial_lr"] = self.initial_lr
+        self._reset_optimizer_lrs(trainer)
+        self._reset_step_lr_state(trainer)
 
 
 def make_data_loaders(
@@ -495,6 +508,7 @@ def main():
                     args.resume_from_checkpoint and args.reset_step_lr_on_resume
                 ),
                 initial_lr=args.lr,
+                gamma=args.gamma,
             ),
         ],
         enable_progress_bar=True,
