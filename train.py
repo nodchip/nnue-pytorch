@@ -1,4 +1,5 @@
 import argparse
+import math
 import time
 import warnings
 import os
@@ -16,6 +17,138 @@ import data_loader
 import model as M
 
 warnings.filterwarnings("ignore", ".*does not have many workers.*")
+
+
+def resolve_progress_mode(progress_mode: str, is_tty: bool) -> str:
+    if progress_mode == "auto":
+        return "tqdm" if is_tty else "log"
+    return progress_mode
+
+
+def _format_hms(seconds: float | None) -> str:
+    if seconds is None or not math.isfinite(seconds) or seconds < 0:
+        return "na"
+
+    total_seconds = int(seconds)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def _format_metric(value: float | None, precision: int) -> str:
+    if value is None or not math.isfinite(value):
+        return "na"
+    return f"{value:.{precision}f}"
+
+
+def format_progress_line(
+    phase: str,
+    epoch: int,
+    total_epochs: int,
+    step: int,
+    positions: int,
+    lr: float | None,
+    loss: float | None,
+    val_loss: float | None,
+    elapsed_seconds: float | None,
+    eta_seconds: float | None,
+    speed: float | None,
+) -> str:
+    return (
+        f"progress phase={phase} epoch={epoch}/{total_epochs} step={step} "
+        f"positions={positions} lr={_format_metric(lr, 8)} "
+        f"loss={_format_metric(loss, 6)} val_loss={_format_metric(val_loss, 6)} "
+        f"elapsed={_format_hms(elapsed_seconds)} eta={_format_hms(eta_seconds)} "
+        f"speed={_format_metric(speed, 1)}pos/s"
+    )
+
+
+class LineProgressCallback(Callback):
+    def __init__(self, log_every_n_epochs: int, batch_size: int):
+        self.log_every_n_epochs = log_every_n_epochs
+        self.batch_size = batch_size
+        self.start_time = None
+        self.last_val_loss = None
+
+    def on_fit_start(self, trainer, pl_module):
+        _ = trainer  # unused
+        _ = pl_module  # unused
+        self.start_time = time.time()
+        self.last_val_loss = None
+
+    def _current_lr(self, trainer):
+        if not trainer.optimizers:
+            return None
+        return trainer.optimizers[0].param_groups[0].get("lr")
+
+    def _estimated_total_steps(self, trainer):
+        total_steps = getattr(trainer, "estimated_stepping_batches", None)
+        if total_steps is None or total_steps <= 0:
+            return None
+        return total_steps
+
+    def _eta_seconds(self, trainer, elapsed_seconds: float):
+        if elapsed_seconds <= 0 or trainer.global_step <= 0:
+            return None
+        total_steps = self._estimated_total_steps(trainer)
+        if total_steps is None or total_steps <= trainer.global_step:
+            return None
+        steps_per_second = trainer.global_step / elapsed_seconds
+        if steps_per_second <= 0:
+            return None
+        return (total_steps - trainer.global_step) / steps_per_second
+
+    def _positions(self, trainer):
+        return trainer.global_step * self.batch_size
+
+    def _print_progress(self, trainer, phase: str, loss: float | None, val_loss: float | None):
+        if self.start_time is None:
+            return
+
+        elapsed_seconds = time.time() - self.start_time
+        speed = self._positions(trainer) / elapsed_seconds if elapsed_seconds > 0 else None
+        message = format_progress_line(
+            phase=phase,
+            epoch=trainer.current_epoch + 1,
+            total_epochs=trainer.max_epochs,
+            step=trainer.global_step,
+            positions=self._positions(trainer),
+            lr=self._current_lr(trainer),
+            loss=loss,
+            val_loss=val_loss,
+            elapsed_seconds=elapsed_seconds,
+            eta_seconds=self._eta_seconds(trainer, elapsed_seconds),
+            speed=speed,
+        )
+        print(message, flush=True)
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        _ = pl_module  # unused
+        if getattr(trainer, "sanity_checking", False):
+            return
+        if self.log_every_n_epochs <= 0:
+            return
+        if (trainer.current_epoch + 1) % self.log_every_n_epochs != 0:
+            return
+        metric = trainer.callback_metrics.get("val_loss")
+        if metric is None:
+            return
+        if isinstance(metric, torch.Tensor):
+            self.last_val_loss = float(metric.detach().item())
+        else:
+            self.last_val_loss = float(metric)
+        self._print_progress(trainer, phase="val", loss=None, val_loss=self.last_val_loss)
+
+
+def build_progress_callbacks(
+    progress_mode: str, progress_log_interval: int, batch_size: int, is_tty: bool
+):
+    resolved_mode = resolve_progress_mode(progress_mode, is_tty)
+    if resolved_mode == "tqdm":
+        return [TQDMProgressBar(refresh_rate=300)], True
+    if resolved_mode == "log":
+        return [LineProgressCallback(progress_log_interval, batch_size)], False
+    return [], False
 
 
 class TimeLimitAfterCheckpoint(Callback):
@@ -336,6 +469,20 @@ def main():
         help="Number of epochs between network snapshots. None to disable.",
     )
     parser.add_argument(
+        "--progress-mode",
+        choices=["auto", "tqdm", "log", "none"],
+        default="auto",
+        dest="progress_mode",
+        help="Progress output mode. auto uses tqdm on TTY and one-line logs otherwise.",
+    )
+    parser.add_argument(
+        "--progress-log-interval",
+        type=int,
+        default=1,
+        dest="progress_log_interval",
+        help="Emit a one-line progress log every N epochs when progress-mode=log.",
+    )
+    parser.add_argument(
         "--save-last-network",
         type=str2bool,
         default=True,
@@ -489,6 +636,12 @@ def main():
         every_n_epochs=args.network_save_period,
         save_top_k=-1,
     )
+    progress_callbacks, enable_progress_bar = build_progress_callbacks(
+        progress_mode=args.progress_mode,
+        progress_log_interval=args.progress_log_interval,
+        batch_size=batch_size,
+        is_tty=sys.stdout.isatty(),
+    )
 
     trainer = L.Trainer(
         default_root_dir=logdir,
@@ -500,7 +653,7 @@ def main():
         logger=tb_logger,
         callbacks=[
             checkpoint_callback,
-            TQDMProgressBar(refresh_rate=300),
+            *progress_callbacks,
             TimeLimitAfterCheckpoint(args.max_time),
             M.WeightClippingCallback(),
             ResetStepLROnResume(
@@ -511,7 +664,7 @@ def main():
                 gamma=args.gamma,
             ),
         ],
-        enable_progress_bar=True,
+        enable_progress_bar=enable_progress_bar,
         enable_checkpointing=True,
         benchmark=True,
     )
