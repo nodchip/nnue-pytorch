@@ -58,8 +58,8 @@ def test_format_progress_line_emits_fixed_key_value_order():
     )
 
 
-def test_line_progress_callback_logs_only_on_validation_epoch_end():
-    callback = LineProgressCallback(log_every_n_epochs=1, batch_size=16384)
+def test_line_progress_callback_logs_on_train_step_interval():
+    callback = LineProgressCallback(log_every_n_steps=25, batch_size=16384)
     trainer = SimpleNamespace(
         optimizers=[torch.optim.SGD([torch.nn.Parameter(torch.tensor(1.0))], lr=4.375e-4)],
         current_epoch=0,
@@ -67,23 +67,17 @@ def test_line_progress_callback_logs_only_on_validation_epoch_end():
         global_step=25,
         estimated_stepping_batches=100,
         callback_metrics={"val_loss": torch.tensor(0.25)},
-        sanity_checking=False,
     )
 
+    callback.start_time = 0.0
     train_buf = io.StringIO()
     with redirect_stdout(train_buf):
         callback.on_train_batch_end(trainer, None, torch.tensor(0.5), None, 0)
-    assert train_buf.getvalue() == ""
-
-    callback.start_time = 0.0
-    val_buf = io.StringIO()
-    with redirect_stdout(val_buf):
-        callback.on_validation_epoch_end(trainer, None)
-    assert "progress phase=val epoch=1/2 step=25 positions=409600" in val_buf.getvalue()
+    assert "progress phase=train epoch=1/2 step=25 positions=409600" in train_buf.getvalue()
 
 
 def test_line_progress_callback_skips_sanity_check_validation():
-    callback = LineProgressCallback(log_every_n_epochs=1, batch_size=16384)
+    callback = LineProgressCallback(log_every_n_steps=25, batch_size=16384)
     trainer = SimpleNamespace(
         optimizers=[torch.optim.SGD([torch.nn.Parameter(torch.tensor(1.0))], lr=4.375e-4)],
         current_epoch=0,

@@ -64,8 +64,8 @@ def format_progress_line(
 
 
 class LineProgressCallback(Callback):
-    def __init__(self, log_every_n_epochs: int, batch_size: int):
-        self.log_every_n_epochs = log_every_n_epochs
+    def __init__(self, log_every_n_steps: int, batch_size: int):
+        self.log_every_n_steps = log_every_n_steps
         self.batch_size = batch_size
         self.start_time = None
         self.last_val_loss = None
@@ -98,6 +98,17 @@ class LineProgressCallback(Callback):
             return None
         return (total_steps - trainer.global_step) / steps_per_second
 
+    def _extract_loss(self, outputs):
+        if outputs is None:
+            return None
+        if isinstance(outputs, torch.Tensor):
+            return float(outputs.detach().item())
+        if isinstance(outputs, dict):
+            loss = outputs.get("loss")
+            if isinstance(loss, torch.Tensor):
+                return float(loss.detach().item())
+        return None
+
     def _positions(self, trainer):
         return trainer.global_step * self.batch_size
 
@@ -122,14 +133,20 @@ class LineProgressCallback(Callback):
         )
         print(message, flush=True)
 
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        _ = pl_module  # unused
+        _ = batch  # unused
+        _ = batch_idx  # unused
+        if self.log_every_n_steps <= 0 or trainer.global_step <= 0:
+            return
+        if trainer.global_step % self.log_every_n_steps != 0:
+            return
+        self._print_progress(
+            trainer, phase="train", loss=self._extract_loss(outputs), val_loss=self.last_val_loss
+        )
+
     def on_validation_epoch_end(self, trainer, pl_module):
         _ = pl_module  # unused
-        if getattr(trainer, "sanity_checking", False):
-            return
-        if self.log_every_n_epochs <= 0:
-            return
-        if (trainer.current_epoch + 1) % self.log_every_n_epochs != 0:
-            return
         metric = trainer.callback_metrics.get("val_loss")
         if metric is None:
             return
@@ -478,9 +495,9 @@ def main():
     parser.add_argument(
         "--progress-log-interval",
         type=int,
-        default=1,
+        default=100,
         dest="progress_log_interval",
-        help="Emit a one-line progress log every N epochs when progress-mode=log.",
+        help="Emit a one-line progress log every N training steps when progress-mode=log.",
     )
     parser.add_argument(
         "--save-last-network",
