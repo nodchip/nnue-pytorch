@@ -76,7 +76,7 @@ def test_line_progress_callback_logs_on_train_step_interval():
     assert "progress phase=train epoch=1/2 step=25 positions=409600" in train_buf.getvalue()
 
 
-def test_line_progress_callback_skips_sanity_check_validation():
+def test_line_progress_callback_logs_validation_during_sanity_check():
     callback = LineProgressCallback(log_every_n_steps=25, batch_size=16384)
     trainer = SimpleNamespace(
         optimizers=[torch.optim.SGD([torch.nn.Parameter(torch.tensor(1.0))], lr=4.375e-4)],
@@ -92,4 +92,4 @@ def test_line_progress_callback_skips_sanity_check_validation():
     buf = io.StringIO()
     with redirect_stdout(buf):
         callback.on_validation_epoch_end(trainer, None)
-    assert buf.getvalue() == ""
+    assert "progress phase=val epoch=1/2 step=0 positions=0" in buf.getvalue()
