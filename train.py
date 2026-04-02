@@ -672,6 +672,7 @@ def main():
             checkpoint_callback,
             *progress_callbacks,
             TimeLimitAfterCheckpoint(args.max_time),
+            M.CUDAGraphMarkStepCallback(enabled=args.compile_backend == "cudagraphs"),
             M.WeightClippingCallback(),
             ResetStepLROnResume(
                 enabled=bool(

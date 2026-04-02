@@ -1,4 +1,4 @@
-from .callbacks import WeightClippingCallback
+from .callbacks import CUDAGraphMarkStepCallback, WeightClippingCallback
 from .config import ModelConfig, LossParams
 from .features import add_feature_args, FeatureSet, get_feature_set_from_name
 from .lightning_module import NNUE
@@ -14,6 +14,7 @@ from .utils import (
 
 
 __all__ = [
+    "CUDAGraphMarkStepCallback",
     "WeightClippingCallback",
     "ModelConfig",
     "LossParams",
