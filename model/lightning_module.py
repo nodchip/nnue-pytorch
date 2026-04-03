@@ -45,6 +45,7 @@ class NNUE(L.LightningModule):
         self.model: NNUEModel = NNUEModel(
             feature_set, config, quantize_config, num_ls_buckets
         )
+        self._compiled_model: nn.Module | None = None
         self.loss_params = loss_params
         self.max_epoch = max_epoch
         self.num_batches_per_epoch = num_batches_per_epoch
@@ -56,6 +57,11 @@ class NNUE(L.LightningModule):
 
     def forward(self, *args, **kwargs):
         return self.model(*args, **kwargs)
+
+    def _forward_model(self) -> nn.Module:
+        if self._compiled_model is not None and torch.is_grad_enabled():
+            return self._compiled_model
+        return self.model
 
     def step_(self, batch: tuple[Tensor, ...], batch_idx, loss_type):
         _ = batch_idx  # unused, but required by pytorch-lightning
@@ -73,7 +79,7 @@ class NNUE(L.LightningModule):
         ) = batch
 
         scorenet = (
-            self.model(
+            self._forward_model()(
                 us,
                 them,
                 white_indices,
