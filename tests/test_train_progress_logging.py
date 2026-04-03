@@ -93,3 +93,32 @@ def test_line_progress_callback_logs_validation_during_sanity_check():
     with redirect_stdout(buf):
         callback.on_validation_epoch_end(trainer, None)
     assert "progress phase=val epoch=1/2 step=0 positions=0" in buf.getvalue()
+
+
+def test_line_progress_callback_reports_instantaneous_speed(monkeypatch):
+    callback = LineProgressCallback(log_every_n_steps=1, batch_size=100)
+    trainer = SimpleNamespace(
+        optimizers=[torch.optim.SGD([torch.nn.Parameter(torch.tensor(1.0))], lr=1.0e-3)],
+        current_epoch=0,
+        max_epochs=2,
+        global_step=1,
+        estimated_stepping_batches=100,
+        callback_metrics={},
+    )
+
+    times = iter([100.0, 104.0, 108.0])
+    monkeypatch.setattr("train.time.time", lambda: next(times))
+
+    callback.on_fit_start(trainer, None)
+
+    first_buf = io.StringIO()
+    with redirect_stdout(first_buf):
+        callback.on_train_batch_end(trainer, None, torch.tensor(0.5), None, 0)
+
+    trainer.global_step = 3
+    second_buf = io.StringIO()
+    with redirect_stdout(second_buf):
+        callback.on_train_batch_end(trainer, None, torch.tensor(0.25), None, 1)
+
+    assert "speed=25.0pos/s" in first_buf.getvalue()
+    assert "speed=50.0pos/s" in second_buf.getvalue()

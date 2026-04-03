@@ -69,12 +69,16 @@ class LineProgressCallback(Callback):
         self.batch_size = batch_size
         self.start_time = None
         self.last_val_loss = None
+        self.last_log_time = None
+        self.last_log_positions = 0
 
     def on_fit_start(self, trainer, pl_module):
         _ = trainer  # unused
         _ = pl_module  # unused
         self.start_time = time.time()
         self.last_val_loss = None
+        self.last_log_time = self.start_time
+        self.last_log_positions = 0
 
     def _current_lr(self, trainer):
         if not trainer.optimizers:
@@ -116,14 +120,24 @@ class LineProgressCallback(Callback):
         if self.start_time is None:
             return
 
-        elapsed_seconds = time.time() - self.start_time
-        speed = self._positions(trainer) / elapsed_seconds if elapsed_seconds > 0 else None
+        now = time.time()
+        elapsed_seconds = now - self.start_time
+        positions = self._positions(trainer)
+        interval_seconds = (
+            None if self.last_log_time is None else now - self.last_log_time
+        )
+        interval_positions = positions - self.last_log_positions
+        speed = (
+            interval_positions / interval_seconds
+            if interval_seconds is not None and interval_seconds > 0
+            else None
+        )
         message = format_progress_line(
             phase=phase,
             epoch=trainer.current_epoch + 1,
             total_epochs=trainer.max_epochs,
             step=trainer.global_step,
-            positions=self._positions(trainer),
+            positions=positions,
             lr=self._current_lr(trainer),
             loss=loss,
             val_loss=val_loss,
@@ -132,6 +146,8 @@ class LineProgressCallback(Callback):
             speed=speed,
         )
         print(message, flush=True)
+        self.last_log_time = now
+        self.last_log_positions = positions
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         _ = pl_module  # unused
