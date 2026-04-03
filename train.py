@@ -272,6 +272,11 @@ def make_data_loaders(
     return train, val
 
 
+def compile_nnue_model(nnue, backend: str):
+    nnue._compiled_model = torch.compile(nnue.model, backend=backend)
+    return nnue
+
+
 def str2bool(v):
     if isinstance(v, bool):
         return v
@@ -687,7 +692,7 @@ def main():
         benchmark=True,
     )
 
-    nnue = torch.compile(nnue, backend=args.compile_backend)
+    nnue = compile_nnue_model(nnue, backend=args.compile_backend)
 
     print("Using C++ data loader")
     train, val = make_data_loaders(
