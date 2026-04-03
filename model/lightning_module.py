@@ -35,6 +35,8 @@ class NNUE(L.LightningModule):
         num_batches_per_epoch=int(100_000_000 / 16384),
         gamma=0.992,
         lr=8.75e-4,
+        beta1=0.9,
+        beta2=0.999,
         param_index=0,
         num_ls_buckets=8,
         loss_params=LossParams(),
@@ -48,6 +50,8 @@ class NNUE(L.LightningModule):
         self.num_batches_per_epoch = num_batches_per_epoch
         self.gamma = gamma
         self.lr = lr
+        self.beta1 = beta1
+        self.beta2 = beta2
         self.param_index = param_index
 
     def forward(self, *args, **kwargs):
@@ -135,7 +139,7 @@ class NNUE(L.LightningModule):
         optimizer = ranger21.Ranger21(
             train_params,
             lr=1.0,
-            betas=(0.9, 0.999),
+            betas=(self.beta1, self.beta2),
             eps=1.0e-7,
             using_gc=False,
             using_normgc=False,

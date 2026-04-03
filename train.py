@@ -287,7 +287,23 @@ def flatten_once(lst):
     return sum(lst, [])
 
 
-def main():
+def expand_path_list_args(paths: list[str]) -> list[str]:
+    expanded = []
+    for path in paths:
+        if not path.startswith("@"):
+            expanded.append(path)
+            continue
+
+        list_file = path[1:]
+        with open(list_file, encoding="utf-8") as f:
+            for line in f:
+                candidate = line.strip()
+                if candidate:
+                    expanded.append(candidate)
+    return expanded
+
+
+def build_arg_parser():
     parser = argparse.ArgumentParser(description="Trains the network.")
     parser.add_argument(
         "datasets",
@@ -403,6 +419,20 @@ def main():
     )
     parser.add_argument(
         "--lr", default=8.75e-4, type=float, dest="lr", help="Initial learning rate."
+    )
+    parser.add_argument(
+        "--beta1",
+        default=0.9,
+        type=float,
+        dest="beta1",
+        help="Beta1 used by the optimizer.",
+    )
+    parser.add_argument(
+        "--beta2",
+        default=0.999,
+        type=float,
+        dest="beta2",
+        help="Beta2 used by the optimizer.",
     )
     parser.add_argument(
         "--num-workers",
@@ -543,11 +573,18 @@ def main():
     )
     parser.add_argument("--l1", type=int, default=M.ModelConfig().L1)
     M.add_feature_args(parser)
+    return parser
+
+
+def main():
+    parser = build_arg_parser()
     args = parser.parse_args()
 
-    args.datasets = flatten_once(args.datasets)
+    args.datasets = expand_path_list_args(flatten_once(args.datasets))
     if args.validation_datasets:
-        args.validation_datasets = flatten_once(args.validation_datasets)
+        args.validation_datasets = expand_path_list_args(
+            flatten_once(args.validation_datasets)
+        )
     else:
         args.validation_datasets = []
 
@@ -598,6 +635,8 @@ def main():
             num_batches_per_epoch=args.epoch_size / batch_size,
             gamma=args.gamma,
             lr=args.lr,
+            beta1=args.beta1,
+            beta2=args.beta2,
             param_index=args.param_index,
             config=M.ModelConfig(L1=args.l1),
             quantize_config=M.QuantizationConfig(),
@@ -618,6 +657,8 @@ def main():
         # from .pt the optimizer is only created after the training is started
         nnue.gamma = args.gamma
         nnue.lr = args.lr
+        nnue.beta1 = args.beta1
+        nnue.beta2 = args.beta2
         nnue.param_index = args.param_index
 
     print("Feature set: {}".format(feature_set.name))
