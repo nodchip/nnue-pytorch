@@ -289,7 +289,12 @@ def make_data_loaders(
 
 
 def compile_nnue_model(nnue, backend: str):
-    nnue._compiled_model = torch.compile(nnue.model, backend=backend)
+    compiled_model = torch.compile(nnue.model, backend=backend)
+    setter = getattr(nnue, "set_compiled_model", None)
+    if callable(setter):
+        setter(compiled_model)
+    else:
+        nnue.__dict__["_compiled_model"] = compiled_model
     return nnue
 
 
