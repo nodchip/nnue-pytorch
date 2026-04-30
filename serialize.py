@@ -5,6 +5,7 @@ import os
 import torch
 
 import model as M
+from model.utils.checkpoint import load_nnue_from_checkpoint
 
 
 def main():
@@ -81,7 +82,7 @@ def main():
     target_is_nnue = args.out_sha or args.target.endswith(".nnue")
 
     if args.source.endswith(".ckpt"):
-        nnue = M.NNUE.load_from_checkpoint(
+        nnue = load_nnue_from_checkpoint(
             args.source,
             feature_set=feature_set,
             config=M.ModelConfig(L1=args.l1),

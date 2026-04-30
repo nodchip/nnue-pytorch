@@ -1,5 +1,6 @@
 import torch
 
+from .checkpoint import load_nnue_from_checkpoint
 from .serialize import NNUEReader
 from ..config import ModelConfig
 from ..features import FeatureSet
@@ -19,9 +20,7 @@ def load_model(
         return model.model
 
     elif filename.endswith(".ckpt"):
-        from ..lightning_module import NNUE
-
-        model = NNUE.load_from_checkpoint(
+        model = load_nnue_from_checkpoint(
             filename,
             feature_set=feature_set,
             config=config,
