@@ -5,6 +5,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import train
+import torch
 from model.lightning_module import NNUE
 
 
@@ -26,6 +27,25 @@ def test_compile_nnue_model_compiles_wrapped_model_only(monkeypatch):
     assert nnue.model is eager_model
     assert nnue._compiled_model is compiled_model
     assert calls == [(eager_model, "inductor")]
+
+
+def test_compile_nnue_model_does_not_register_compiled_model(monkeypatch):
+    class FakeNNUE(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.model = torch.nn.Linear(2, 3)
+
+    nnue = FakeNNUE()
+    compiled_model = torch.nn.Linear(2, 3)
+
+    monkeypatch.setattr(train.torch, "compile", lambda target, backend: compiled_model)
+
+    train.compile_nnue_model(nnue, backend="inductor")
+
+    assert nnue._compiled_model is compiled_model
+    assert all(
+        not key.startswith("_compiled_model.") for key in nnue.state_dict().keys()
+    )
 
 
 def test_forward_model_uses_compiled_model_only_when_grad_is_enabled():

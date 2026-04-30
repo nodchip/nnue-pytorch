@@ -273,7 +273,7 @@ def make_data_loaders(
 
 
 def compile_nnue_model(nnue, backend: str):
-    nnue._compiled_model = torch.compile(nnue.model, backend=backend)
+    nnue.__dict__["_compiled_model"] = torch.compile(nnue.model, backend=backend)
     return nnue
 
 
