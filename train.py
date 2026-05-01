@@ -77,6 +77,11 @@ class LineProgressCallback(Callback):
         self.start_step = max(0, getattr(trainer, "global_step", 0))
         self.last_val_loss = None
 
+    def on_train_start(self, trainer, pl_module):
+        _ = pl_module  # unused
+        self.start_time = time.time()
+        self.start_step = max(0, getattr(trainer, "global_step", 0))
+
     def _current_lr(self, trainer):
         if not trainer.optimizers:
             return None
