@@ -219,13 +219,23 @@ class ResetStepLROnResume(Callback):
             scheduler._step_count = 1
             scheduler._last_lr = [self.initial_lr] * num_param_groups
 
+    def _reset(self, trainer):
+        self._reset_optimizer_lrs(trainer)
+        self._reset_step_lr_state(trainer)
+
     def on_fit_start(self, trainer, pl_module):
         _ = pl_module  # unused
         if not self.enabled:
             return
 
-        self._reset_optimizer_lrs(trainer)
-        self._reset_step_lr_state(trainer)
+        self._reset(trainer)
+
+    def on_train_start(self, trainer, pl_module):
+        _ = pl_module  # unused
+        if not self.enabled:
+            return
+
+        self._reset(trainer)
 
 
 def make_data_loaders(
