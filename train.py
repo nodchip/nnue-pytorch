@@ -41,6 +41,12 @@ def _format_metric(value: float | None, precision: int) -> str:
     return f"{value:.{precision}f}"
 
 
+def _format_lr(value: float | None) -> str:
+    if value is None or not math.isfinite(value):
+        return "na"
+    return f"{value:.6e}"
+
+
 def format_progress_line(
     phase: str,
     epoch: int,
@@ -56,7 +62,7 @@ def format_progress_line(
 ) -> str:
     return (
         f"progress phase={phase} epoch={epoch}/{total_epochs} step={step} "
-        f"positions={positions} lr={_format_metric(lr, 8)} "
+        f"positions={positions} lr={_format_lr(lr)} "
         f"loss={_format_metric(loss, 6)} val_loss={_format_metric(val_loss, 6)} "
         f"elapsed={_format_hms(elapsed_seconds)} eta={_format_hms(eta_seconds)} "
         f"speed={_format_metric(speed, 1)}pos/s"

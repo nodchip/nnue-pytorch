@@ -53,7 +53,7 @@ def test_format_progress_line_emits_fixed_key_value_order():
     assert (
         message
         == "progress phase=train epoch=12/1200 step=18432 positions=301989888 "
-        "lr=0.00043750 loss=0.512384 val_loss=0.498221 elapsed=03:14:52 "
+        "lr=4.375000e-04 loss=0.512384 val_loss=0.498221 elapsed=03:14:52 "
         "eta=08:21:10 speed=15432.7pos/s"
     )
 
