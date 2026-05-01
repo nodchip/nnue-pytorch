@@ -76,6 +76,31 @@ def test_line_progress_callback_logs_on_train_step_interval():
     assert "progress phase=train epoch=1/2 step=25 positions=409600" in train_buf.getvalue()
 
 
+def test_line_progress_callback_speed_uses_steps_since_fit_start(monkeypatch):
+    callback = LineProgressCallback(log_every_n_steps=25, batch_size=10)
+    trainer = SimpleNamespace(
+        optimizers=[torch.optim.SGD([torch.nn.Parameter(torch.tensor(1.0))], lr=4.375e-4)],
+        current_epoch=0,
+        max_epochs=2,
+        global_step=1000,
+        estimated_stepping_batches=1100,
+        callback_metrics={"val_loss": torch.tensor(0.25)},
+    )
+
+    monkeypatch.setattr("train.time.time", lambda: 100.0)
+    callback.on_fit_start(trainer, None)
+
+    trainer.global_step = 1025
+    monkeypatch.setattr("train.time.time", lambda: 110.0)
+    train_buf = io.StringIO()
+    with redirect_stdout(train_buf):
+        callback.on_train_batch_end(trainer, None, torch.tensor(0.5), None, 0)
+
+    output = train_buf.getvalue()
+    assert "positions=10250" in output
+    assert "speed=25.0pos/s" in output
+
+
 def test_line_progress_callback_logs_validation_during_sanity_check():
     callback = LineProgressCallback(log_every_n_steps=25, batch_size=16384)
     trainer = SimpleNamespace(

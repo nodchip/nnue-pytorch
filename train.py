@@ -68,12 +68,13 @@ class LineProgressCallback(Callback):
         self.log_every_n_steps = log_every_n_steps
         self.batch_size = batch_size
         self.start_time = None
+        self.start_step = 0
         self.last_val_loss = None
 
     def on_fit_start(self, trainer, pl_module):
-        _ = trainer  # unused
         _ = pl_module  # unused
         self.start_time = time.time()
+        self.start_step = max(0, getattr(trainer, "global_step", 0))
         self.last_val_loss = None
 
     def _current_lr(self, trainer):
@@ -88,12 +89,13 @@ class LineProgressCallback(Callback):
         return total_steps
 
     def _eta_seconds(self, trainer, elapsed_seconds: float):
-        if elapsed_seconds <= 0 or trainer.global_step <= 0:
+        steps_done = self._steps_since_start(trainer)
+        if elapsed_seconds <= 0 or steps_done <= 0:
             return None
         total_steps = self._estimated_total_steps(trainer)
         if total_steps is None or total_steps <= trainer.global_step:
             return None
-        steps_per_second = trainer.global_step / elapsed_seconds
+        steps_per_second = steps_done / elapsed_seconds
         if steps_per_second <= 0:
             return None
         return (total_steps - trainer.global_step) / steps_per_second
@@ -112,12 +114,22 @@ class LineProgressCallback(Callback):
     def _positions(self, trainer):
         return trainer.global_step * self.batch_size
 
+    def _steps_since_start(self, trainer):
+        return max(0, trainer.global_step - self.start_step)
+
+    def _positions_since_start(self, trainer):
+        return self._steps_since_start(trainer) * self.batch_size
+
     def _print_progress(self, trainer, phase: str, loss: float | None, val_loss: float | None):
         if self.start_time is None:
             return
 
         elapsed_seconds = time.time() - self.start_time
-        speed = self._positions(trainer) / elapsed_seconds if elapsed_seconds > 0 else None
+        speed = (
+            self._positions_since_start(trainer) / elapsed_seconds
+            if elapsed_seconds > 0
+            else None
+        )
         message = format_progress_line(
             phase=phase,
             epoch=trainer.current_epoch + 1,
