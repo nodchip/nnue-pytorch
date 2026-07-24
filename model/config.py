@@ -4,8 +4,8 @@ from dataclasses import dataclass
 # 3 layer fully connected network
 @dataclass
 class ModelConfig:
-    L1: int = 1536
-    L2: int = 15
+    L1: int = 768
+    L2: int = 7
     L3: int = 32
 
 
